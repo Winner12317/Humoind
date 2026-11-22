@@ -32,8 +32,9 @@ check_only="${1:-}"
 [[ "$env_name" =~ ^[[:alnum:]_][[:alnum:]_.-]*$ && "$env_name" != base && "$env_name" != root ]] ||
   die 'AMP_CONDA_ENV must name a dedicated Conda environment.'
 
+conda_lock="$project_root/docs/reproduction/conda-linux-64.txt"
 requirements="$project_root/docs/reproduction/requirements-linux-py311-cu126.txt"
-[[ -f "$requirements" && -f setup.py ]] ||
+[[ -f "$conda_lock" && -f "$requirements" && -f setup.py ]] ||
   die 'Run this script from a complete SuperAMP checkout.'
 
 if [[ -n "${AMP_CONDA_ROOT:-}" ]]; then
@@ -96,7 +97,8 @@ if [[ "$env_status" == missing ]]; then
   [[ -z "$check_only" ]] || die "Conda environment $env_name is missing."
   printf '[SuperAMP] Creating %s with Python 3.11.17\n' "$env_name"
   "$conda_exe" create --name "$env_name" --yes --no-default-packages \
-    --override-channels --channel https://conda.anaconda.org/conda-forge python=3.11.17 pip
+    --override-channels --channel https://conda.anaconda.org/conda-forge \
+    --file "$conda_lock"
 fi
 
 export PYTHONPATH="$project_root"

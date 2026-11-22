@@ -48,6 +48,8 @@ source scripts/activate_env.sh
 
 脚本会创建或复用 `superamp` Conda 环境，安装 Python 3.11.17、PyTorch 2.7.0+cu126 及项目锁定依赖，并应用 mjlab 的历史观测补丁。机器上没有 Conda 时，会在 `~/miniconda3` 安装 Miniconda。可为脚本设置 `AMP_CONDA_ROOT` 指定 Conda 位置，或运行 `bash scripts/install_env.sh --check` 检查已装环境。
 
+新环境按 [Linux x86_64 Conda 包清单](docs/reproduction/conda-linux-64.txt)安装 Python 和 pip，避免精简索引省略固定的 Python 版本。
+
 GPU 训练需要远端已安装兼容的 NVIDIA 驱动。Ubuntu 上如缺少系统依赖，可执行 `sudo apt-get install -y curl ca-certificates build-essential libegl1 libgl1 libglfw3`。开始训练前请将已有的 G1 或 PM01 参考动作放回 `src/assets/motions/<robot>/amp/`，保留 `WalkandRun` 和 `Recovery` 子目录。
 
 ## 快速开始
