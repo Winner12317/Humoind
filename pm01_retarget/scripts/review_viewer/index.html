@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PM01 motion review</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <h1>PM01 motion review</h1>
+    <label class="field">
+      <span>Motion set</span>
+      <select id="set-select"></select>
+    </label>
+    <p id="set-note" class="hint"></p>
+    <nav id="clip-list" aria-label="Clips"></nav>
+    <details id="keys" open>
+      <summary>Keys</summary>
+      <dl>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>previous / next frame</dd>
+        <dt><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd></dt><dd>10 frames</dd>
+        <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>first / last frame</dd>
+        <dt><kbd>Space</kbd></dt><dd>play / pause</dd>
+        <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>previous / next clip</dd>
+        <dt><kbd>G</kbd></dt><dd>G1 placement</dd>
+        <dt><kbd>C</kbd></dt><dd>collision shapes</dd>
+        <dt><kbd>F</kbd></dt><dd>camera follow</dd>
+      </dl>
+    </details>
+  </aside>
+
+  <main id="stage">
+    <div id="viewport">
+      <canvas id="scene"></canvas>
+      <div id="hud-title">
+        <div id="clip-title">–</div>
+        <div id="clip-sub"></div>
+        <div id="robot-key">
+          <span><i class="swatch pm"></i>PM01 (retargeted)</span>
+          <span id="g1-key"><i class="swatch g1"></i>G1 (source)</span>
+        </div>
+      </div>
+      <div id="hud-controls">
+        <div class="control">
+          <span>G1</span>
+          <div class="segmented" id="g1-mode" role="group" aria-label="G1 placement">
+            <button data-value="beside" title="G1 stands 1 m beside PM01 and is carried along with it">Beside</button>
+            <button data-value="overlay" title="G1 drawn translucent with its pelvis over PM01's">Overlay</button>
+            <button data-value="own" title="G1 at the positions stored in its own clip (PM01 travels 2.5 % further)">Own path</button>
+            <button data-value="off">Off</button>
+          </div>
+        </div>
+        <div class="control">
+          <span>Shapes</span>
+          <div class="segmented" id="geom-mode" role="group" aria-label="Geometry">
+            <button data-value="visual">Visual</button>
+            <button data-value="collision">Collision</button>
+          </div>
+        </div>
+        <div class="control">
+          <span>View</span>
+          <div class="segmented" id="view-presets" role="group" aria-label="Camera view">
+            <button data-view="front">Front</button>
+            <button data-view="side">Side</button>
+            <button data-view="back">Back</button>
+            <button data-view="top">Top</button>
+          </div>
+          <label class="check"><input type="checkbox" id="follow" checked> Follow</label>
+        </div>
+      </div>
+      <div id="status" hidden></div>
+    </div>
+
+    <div id="transport">
+      <div id="buttons">
+        <button data-step="first" title="First frame (Home)">First</button>
+        <button data-step="-10" title="Back 10 frames (Shift+←)">−10</button>
+        <button data-step="-1" title="Previous frame (←)">−1</button>
+        <button id="play" title="Play / pause (Space)">Play</button>
+        <button data-step="1" title="Next frame (→)">+1</button>
+        <button data-step="10" title="Forward 10 frames (Shift+→)">+10</button>
+        <button data-step="last" title="Last frame (End)">Last</button>
+      </div>
+      <label class="field inline">
+        <span>Frame</span>
+        <input type="number" id="frame-input" min="0" value="0">
+      </label>
+      <span id="frame-total"></span>
+      <span id="time-readout"></span>
+      <span class="spacer"></span>
+      <label class="field inline">
+        <span>Speed</span>
+        <select id="speed">
+          <option value="0.1">0.1×</option>
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="loop" checked> Loop</label>
+    </div>
+
+    <div id="timeline">
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Frame">
+      <div id="chart-head">
+        <select id="metric" aria-label="Plotted quantity"></select>
+        <div id="legend"></div>
+        <span class="spacer"></span>
+        <button id="peak" title="Jump to the frame where this quantity is worst">Go to worst frame</button>
+      </div>
+      <div id="chart-wrap">
+        <canvas id="chart"></canvas>
+        <div id="tooltip" hidden></div>
+      </div>
+    </div>
+  </main>
+
+  <aside id="inspector">
+    <div id="notes" hidden></div>
+
+    <section>
+      <h2>Root</h2>
+      <table class="grid" id="root-table">
+        <thead><tr><th></th><th>PM01</th><th>G1</th></tr></thead>
+        <tbody>
+          <tr><th>height</th><td id="root-z-pm"></td><td id="root-z-g1"></td></tr>
+          <tr><th>x, y</th><td id="root-xy-pm"></td><td id="root-xy-g1"></td></tr>
+          <tr><th>heading</th><td id="root-yaw-pm"></td><td id="root-yaw-g1"></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Feet</h2>
+      <table class="grid" id="feet-table">
+        <thead><tr><th></th><th>PM01 L</th><th>PM01 R</th><th>G1 L</th><th>G1 R</th></tr></thead>
+        <tbody>
+          <tr><th>sole height, cm</th><td></td><td></td><td></td><td></td></tr>
+          <tr><th>speed, m/s</th><td></td><td></td><td></td><td></td></tr>
+          <tr><th>planted (G1)</th><td colspan="2" id="planted-l"></td><td colspan="2" id="planted-r"></td></tr>
+        </tbody>
+      </table>
+      <p class="hint">Sole height is the lowest point of the foot; speed is horizontal. Planted: G1's sole within 3 cm of its floor and slower than 0.15 m/s.</p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <table class="grid" id="contact-table">
+        <thead><tr><th></th><th>PM01</th><th>G1</th></tr></thead>
+        <tbody>
+          <tr><th>lowest point</th><td id="low-pm"></td><td id="low-g1"></td></tr>
+          <tr><th>self-penetration</th><td id="pen-pm"></td><td id="pen-g1"></td></tr>
+        </tbody>
+      </table>
+      <p class="hint" id="pen-pairs"></p>
+    </section>
+
+    <section>
+      <h2>Segment rotation error <span class="unit">PM01 vs G1, since the calibration pose</span></h2>
+      <div id="segments" class="rows"></div>
+    </section>
+
+    <section>
+      <h2>PM01 joints <span class="unit">click a row to plot it</span></h2>
+      <div id="joints-pm" class="rows"></div>
+    </section>
+
+    <details id="g1-joints-box">
+      <summary><h2>G1 joints</h2></summary>
+      <div id="joints-g1" class="rows"></div>
+    </details>
+  </aside>
+
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

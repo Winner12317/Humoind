@@ -1,0 +1,23 @@
+# Local environments, IDE files and build caches
+.venv/
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+
+# Local training results and reference motion data
+/SuperAMP/logs/
+/SuperAMP/results/
+/SuperAMP/.wmac_cache/
+/SuperAMP/motion_data_csv/
+/SuperAMP/src/assets/motions/g1/amp/
+/SuperAMP/src/assets/motions/pm01/amp/
+/pm01_retarget/g1_source/
+/pm01_retarget/pm01_hhtools/
+/pm01_retarget/pm01_refined/
+/pm01_retarget/pm01_csv/
+/pm01_retarget/pm01_npz_50hz/
+/pm01_retarget/qa/
