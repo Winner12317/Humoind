@@ -6,6 +6,14 @@ die() {
   exit 1
 }
 
+conda_is_compatible() {
+  local version
+  version="$("$1/bin/conda" --version 2>&1)" || return 1
+  [[ "$version" =~ conda[[:space:]]+([0-9]+)\.([0-9]+) ]] || return 1
+  # Conda 4.9 supports both .conda lock URLs and run --no-capture-output.
+  (( BASH_REMATCH[1] > 4 || (BASH_REMATCH[1] == 4 && BASH_REMATCH[2] >= 9) ))
+}
+
 case "${1:-}" in
   -h|--help)
     cat <<'HELP'
@@ -37,20 +45,29 @@ requirements="$project_root/docs/reproduction/requirements-linux-py311-cu126.txt
 [[ -f "$conda_lock" && -f "$requirements" && -f setup.py ]] ||
   die 'Run this script from a complete SuperAMP checkout.'
 
-if [[ -n "${AMP_CONDA_ROOT:-}" ]]; then
-  conda_root="$AMP_CONDA_ROOT"
-elif [[ -x "${CONDA_EXE:-}" ]]; then
-  conda_root="$("$CONDA_EXE" info --base)"
-elif conda_exe="$(type -P conda)"; then
-  conda_root="$("$conda_exe" info --base)"
-else
-  conda_root="$HOME/miniconda3"
-  for candidate in "$HOME/miniconda3" "$HOME/miniforge3" "$HOME/anaconda3"; do
-    if [[ -x "$candidate/bin/conda" ]]; then
-      conda_root="$candidate"
-      break
-    fi
-  done
+conda_root="${AMP_CONDA_ROOT:-}"
+if [[ -z "$conda_root" ]]; then
+  conda_exe="${CONDA_EXE:-}"
+  if [[ ! -x "$conda_exe" ]]; then
+    conda_exe="$(type -P conda || true)"
+  fi
+  if [[ -n "$conda_exe" ]]; then
+    conda_root="$("$conda_exe" info --base 2>/dev/null || true)"
+  fi
+  if [[ -z "$conda_root" || ! -x "$conda_root/bin/conda" ]]; then
+    conda_root="$HOME/miniconda3"
+    for candidate in "$HOME/miniconda3" "$HOME/miniforge3" "$HOME/anaconda3" "$HOME/miniconda3-superamp"; do
+      if [[ -x "$candidate/bin/conda" ]]; then
+        conda_root="$candidate"
+        break
+      fi
+    done
+  fi
+  if [[ -x "$conda_root/bin/conda" ]] && ! conda_is_compatible "$conda_root"; then
+    printf '[SuperAMP] Conda 4.9 or newer is required. Using %s instead of %s.\n' \
+      "$HOME/miniconda3-superamp" "$conda_root"
+    conda_root="$HOME/miniconda3-superamp"
+  fi
 fi
 
 if [[ ! -x "$conda_root/bin/conda" ]]; then
@@ -71,10 +88,22 @@ if [[ ! -x "$conda_root/bin/conda" ]]; then
   mkdir -p -- "$(dirname -- "$conda_root")"
   bash "$installer" -b -p "$conda_root"
 fi
+conda_is_compatible "$conda_root" ||
+  die "Conda 4.9 or newer is required at $conda_root. Set AMP_CONDA_ROOT to a compatible installation or a new directory."
 
 conda_exe="$conda_root/bin/conda"
+activation_env="$env_name"
+env_selector=(--name "$env_name")
+managed_prefix=""
+if [[ "$conda_root" == "$HOME/miniconda3-superamp" ]]; then
+  # A name lookup can find an environment belonging to a different Conda installation.
+  managed_prefix="$conda_root/envs/$env_name"
+  [[ ! -L "$managed_prefix" ]] || die "Managed environment must not be a symlink: $managed_prefix"
+  activation_env="$managed_prefix"
+  env_selector=(--prefix "$managed_prefix")
+fi
 run_env() {
-  "$conda_exe" run --no-capture-output --name "$env_name" "$@"
+  "$conda_exe" run --no-capture-output "${env_selector[@]}" "$@"
 }
 
 env_status="$("$conda_exe" info --json | "$conda_root/bin/python" -c '
@@ -82,9 +111,10 @@ import json
 from pathlib import Path
 import sys
 
-name = sys.argv[1]
-for directory in json.load(sys.stdin)["envs_dirs"]:
-    prefix = Path(directory) / name
+name, managed_prefix = sys.argv[1:]
+env_dirs = json.load(sys.stdin)["envs_dirs"]
+prefixes = [Path(managed_prefix)] if managed_prefix else [Path(directory) / name for directory in env_dirs]
+for prefix in prefixes:
     if (prefix / "conda-meta" / "history").is_file():
         print("existing")
         break
@@ -92,11 +122,11 @@ for directory in json.load(sys.stdin)["envs_dirs"]:
         sys.exit(f"Conda environment path already exists without Conda metadata: {prefix}")
 else:
     print("missing")
-' "$env_name")"
+' "$env_name" "$managed_prefix")"
 if [[ "$env_status" == missing ]]; then
   [[ -z "$check_only" ]] || die "Conda environment $env_name is missing."
   printf '[SuperAMP] Creating %s with Python 3.11.17\n' "$env_name"
-  "$conda_exe" create --name "$env_name" --yes --no-default-packages \
+  "$conda_exe" create "${env_selector[@]}" --yes --no-default-packages \
     --override-channels --channel https://conda.anaconda.org/conda-forge \
     --file "$conda_lock"
 fi
@@ -215,5 +245,8 @@ PY
 
 printf '[SuperAMP] Activate and enter the training directory with\n'
 printf '  cd %q\n' "$project_root"
-printf '  export AMP_CONDA_ROOT=%q AMP_CONDA_ENV=%q\n' "$conda_root" "$env_name"
+printf '  export AMP_CONDA_ROOT=%q AMP_CONDA_ENV=%q\n' "$conda_root" "$activation_env"
+if [[ -n "${CONDA_ENVS_PATH:-}" ]]; then
+  printf '  export CONDA_ENVS_PATH=%q\n' "$CONDA_ENVS_PATH"
+fi
 printf '  source scripts/activate_env.sh\n'

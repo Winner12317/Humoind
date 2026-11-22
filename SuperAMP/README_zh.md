@@ -42,11 +42,11 @@
 
 ```bash
 bash scripts/install_env.sh
-export AMP_CONDA_ENV=superamp
-source scripts/activate_env.sh
 ```
 
-脚本会创建或复用 `superamp` Conda 环境，安装 Python 3.11.17、PyTorch 2.7.0+cu126 及项目锁定依赖，并应用 mjlab 的历史观测补丁。机器上没有 Conda 时，会在 `~/miniconda3` 安装 Miniconda。可为脚本设置 `AMP_CONDA_ROOT` 指定 Conda 位置，或运行 `bash scripts/install_env.sh --check` 检查已装环境。
+脚本会创建或复用 `superamp` Conda 环境，安装 Python 3.11.17、PyTorch 2.7.0+cu126 及项目锁定依赖，并应用 mjlab 的历史观测补丁。安装完成后，执行脚本打印的激活命令。
+
+没有 Conda 时，脚本会在 `~/miniconda3` 安装 Miniconda。自动发现的 Conda 低于 4.9 时，脚本会在 `~/miniconda3-superamp` 使用独立的 Miniconda。可设置 `AMP_CONDA_ROOT` 选择 Conda 位置，或运行 `bash scripts/install_env.sh --check` 检查已装环境。
 
 新环境按 [Linux x86_64 Conda 包清单](docs/reproduction/conda-linux-64.txt)安装 Python 和 pip，避免精简索引省略固定的 Python 版本。
 
