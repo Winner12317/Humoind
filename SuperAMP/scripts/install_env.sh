@@ -92,15 +92,14 @@ conda_is_compatible "$conda_root" ||
   die "Conda 4.9 or newer is required at $conda_root. Set AMP_CONDA_ROOT to a compatible installation or a new directory."
 
 conda_exe="$conda_root/bin/conda"
-activation_env="$env_name"
 env_selector=(--name "$env_name")
 managed_prefix=""
 if [[ "$conda_root" == "$HOME/miniconda3-superamp" ]]; then
   # A name lookup can find an environment belonging to a different Conda installation.
   managed_prefix="$conda_root/envs/$env_name"
   [[ ! -L "$managed_prefix" ]] || die "Managed environment must not be a symlink: $managed_prefix"
-  activation_env="$managed_prefix"
   env_selector=(--prefix "$managed_prefix")
+  export CONDA_ENVS_PATH="$conda_root/envs"
 fi
 run_env() {
   "$conda_exe" run --no-capture-output "${env_selector[@]}" "$@"
@@ -245,7 +244,7 @@ PY
 
 printf '[SuperAMP] Activate and enter the training directory with\n'
 printf '  cd %q\n' "$project_root"
-printf '  export AMP_CONDA_ROOT=%q AMP_CONDA_ENV=%q\n' "$conda_root" "$activation_env"
+printf '  export AMP_CONDA_ROOT=%q AMP_CONDA_ENV=%q\n' "$conda_root" "$env_name"
 if [[ -n "${CONDA_ENVS_PATH:-}" ]]; then
   printf '  export CONDA_ENVS_PATH=%q\n' "$CONDA_ENVS_PATH"
 fi
