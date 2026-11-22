@@ -26,6 +26,17 @@ cp -a pm01_retarget/hhtools_presets/pm01 Human-Humanoid-Tools/configs/robots/
 
 若已有本项目生成的 PM01 动作，可直接恢复 `SuperAMP/src/assets/motions/pm01/amp/`。也可按[重定向步骤](pm01_retarget/README.md#regenerating)重新生成 `pm01_retarget/pm01_npz_50hz/`，然后在 SuperAMP 环境中运行 `python scripts/pm01/convert_pm01_motions.py`。
 
-SuperAMP 的安装与训练见对应文档。`activate_local.sh` 使用原机器的 Miniconda 路径。其他机器可设置 `AMP_CONDA_ENV=superamp` 后运行 `source scripts/activate_env.sh`。
+## 安装远端训练环境
+
+Linux x86_64 上，从仓库根目录运行。
+
+```bash
+cd SuperAMP
+bash scripts/install_env.sh
+export AMP_CONDA_ENV=superamp
+source scripts/activate_env.sh
+```
+
+安装脚本会创建或复用 `superamp` 环境，安装锁定的 PyTorch CUDA 12.6 依赖并应用 mjlab 补丁。远端训练需要已安装兼容的 NVIDIA 驱动，并按上面的步骤准备相应机器人的参考动作。更多安装选项见 [SuperAMP 说明](SuperAMP/README_zh.md#远端一键安装训练环境)。
 
 本仓库记录加入 PM01 适配后的工作树。原 G1 复现手册对应加入 PM01 之前的独立快照。
