@@ -50,7 +50,7 @@ bash scripts/install_env.sh
 
 新环境按 [Linux x86_64 Conda 包清单](docs/reproduction/conda-linux-64.txt)安装 Python 和 pip，避免精简索引省略固定的 Python 版本。
 
-GPU 训练需要远端已安装兼容的 NVIDIA 驱动。Ubuntu 上如缺少系统依赖，可执行 `sudo apt-get install -y curl ca-certificates build-essential libegl1 libgl1 libglfw3`。开始训练前请将已有的 G1 或 PM01 参考动作放回 `src/assets/motions/<robot>/amp/`，保留 `WalkandRun` 和 `Recovery` 子目录。
+GPU 训练需要远端已安装兼容的 NVIDIA 驱动。Ubuntu 上如缺少系统依赖，可执行 `sudo apt-get install -y curl ca-certificates build-essential libegl1 libgl1 libglfw3`。Humoind 仓库已包含 PM01 训练用的 18 条 NPZ。使用 G1 任务前，请将原始 G1 参考动作恢复到 `src/assets/motions/g1/amp/`，保留 `WalkandRun` 和 `Recovery` 子目录。
 
 ## 快速开始
 
