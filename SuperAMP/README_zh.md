@@ -52,6 +52,8 @@ bash scripts/install_env.sh
 
 GPU 训练需要远端已安装兼容的 NVIDIA 驱动。Ubuntu 上如缺少系统依赖，可执行 `sudo apt-get install -y curl ca-certificates build-essential libegl1 libgl1 libglfw3`。Humoind 仓库已包含 PM01 训练用的 18 条 NPZ。使用 G1 任务前，请将原始 G1 参考动作恢复到 `src/assets/motions/g1/amp/`，保留 `WalkandRun` 和 `Recovery` 子目录。
 
+PM01 起身修复版的训练与续训命令见 [PM01 文档](docs/pm01/README.md#wmac-with-the-recovery-style-fixes)，清理后的动作位于 `src/assets/motions/pm01/amp_clean`。
+
 ## 快速开始
 
 已运行一键安装的用户可以直接跳到第 3 步查看可用任务。前两步保留供手动安装时参考。

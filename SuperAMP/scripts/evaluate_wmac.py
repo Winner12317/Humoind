@@ -376,6 +376,13 @@ def evaluate_mode(actor, args, mode, output):
     # never silently switch it to match a checkpoint's training reward.
     height_reward = getattr(args, "recovery_height_reward", "height_only_v1")
     configure_recovery_height_reward(cfg, height_reward)
+    if getattr(args, "reference_motion_root", None):
+        # Reset from the reference clips the policy was trained on.
+        from src.wmac.recovery_style import resolve_motion_root
+        root = resolve_motion_root(args.reference_motion_root, REPO)
+        cfg.events["init_motion_loader"].params.update(
+            motion_dir=str(root / "WalkandRun"), recovery_dir=str(root / "Recovery"))
+        cfg.events["reset_from_motion"].params["motion_dir"] = str(root / "WalkandRun")
     cfg.scene.num_envs = args.num_envs
     cfg.seed = args.seed
     cfg.curriculum = {}
@@ -600,6 +607,9 @@ def main():
     parser.add_argument("--walk-hold-steps", type=int, default=50)
     parser.add_argument("--walk-velocity-tolerance", type=float, default=0.5)
     parser.add_argument("--walk-yaw-tolerance", type=float, default=0.5)
+    parser.add_argument("--reference-motion-root", default=None,
+                        help="Motion directory (WalkandRun/, Recovery/) to reset from instead of the task's own, "
+                             "e.g. one written by clean_recovery_reference.py")
     parser.add_argument("--output", type=Path, help="Output directory for metrics.json and initial-state NPZs")
     args = parser.parse_args()
     for name in ("num_envs", "steps", "stable_steps", "walk_hold_steps"):

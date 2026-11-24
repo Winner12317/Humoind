@@ -7,7 +7,8 @@ the 18 G1 clips retargeted to PM01 (`<workspace>/pm01_retarget`, 9,992 frames at
 
 ## Train
 
-Activate the environment as for the G1 (`source activate_local.sh`).
+On a Linux GPU server, run `bash scripts/install_env.sh` from the SuperAMP directory.
+Run the activation commands printed by the installer before starting training.
 
 ```bash
 # PPO + AMP, flat ground (or EngineAI-PM01-AMP-Rough)
@@ -26,6 +27,76 @@ bash scripts/train_smooth_weights_v3.sh \
 first WMAC run in `.wmac_cache/motions/pm01_mirrored` (the G1 cache is not touched).
 `scripts/evaluate_wmac.py`, `scripts/play_wmac.py` and `scripts/play.py` take PM01
 checkpoints as they take G1 ones; evaluation thresholds follow the robot.
+
+### WMAC with the recovery-style fixes
+
+`scripts/train_recovery_style_v1.sh` is the launch command above plus the opt-in fixes
+for abrupt, off-reference get-ups (`src/wmac/recovery_style.py` describes each option),
+and `src/assets/motions/pm01/amp_clean` is the PM01 clip set with the get-up clip
+repaired by `scripts/clean_recovery_reference.py --robot pm01`.
+
+```bash
+# from scratch
+bash scripts/train_recovery_style_v1.sh \
+  --task EngineAI-PM01-AMP-Flat-Aligned \
+  --reference-motion-root src/assets/motions/pm01/amp_clean \
+  --num-envs 1024 \
+  --iterations 400000 \
+  --imagined-recovery-foot-slip learned_v1 \
+  --discriminator-updates 2 --discriminator-batch-size 25600 \
+  --log-root "$AMP_LOG_ROOT" --run-name pm01_recovery_style
+
+# continue a checkpoint that was trained without the fixes (its saved settings are
+# restored; --num-envs etc. are not repeated)
+bash scripts/train_recovery_style_v1.sh \
+  --resume "$HOME/checkpoints/model_78400.pt" --allow-recovery-style-migration \
+  --reference-motion-root src/assets/motions/pm01/amp_clean \
+  --iterations 79600 --log-root "$AMP_LOG_ROOT" --run-name pm01_recovery_style_fork
+```
+
+Set `AMP_LOG_ROOT` to a writable directory on the training server before running either
+command. The resume example adds 1,200 iterations to `model_78400.pt` and restores its
+environment count. The 1,024-environment setup was used for the PM01 pilot on an RTX 4080.
+
+The mirrored set for the cleaned clips is built on the first run in
+`.wmac_cache/motions/pm01_mirrored__amp_clean`. Training evaluations start from the
+cleaned clips too; for a manual one pass
+`scripts/evaluate_wmac.py --reference-motion-root src/assets/motions/pm01/amp_clean`.
+A checkpoint trained this way resumes without any of these flags. PPO + AMP
+(`scripts/train.py`) still reads `src/assets/motions/pm01/amp`.
+
+What the cleaning changed in `Recovery/fallAndGetUp1_subject1.npz` (the walking clips
+are byte-identical copies), measured on the training collision model:
+
+| | `amp` | `amp_clean` |
+|---|---|---|
+| On-the-ground frames more than 1 cm in the floor | 2.4 % (max 7.4 cm) | 0 |
+| Frames with links overlapping by more than 1 cm | 4.0 % (max 6.8 cm) | 0 |
+| Fastest joint 20 ms after a reset from rest, worst frame | 6.8 rad/s | 3.0 rad/s |
+| Joint speed p99 / max over the clip, rad/s | 6.51 / 23.9 | 6.51 / 24.0 |
+
+26 % of the frames change; the largest joint change is 0.37 rad and the largest root
+lift 6.4 cm.
+
+Validation so far is a fine-tuning pilot, not a full run: `policy/wamp/model_78400.pt`
+continued for 1,200 iterations (1,024 environments, one seed, RTX 4080), evaluated
+with `evaluate_wmac.py` (128 starts) and `diagnose_recovery_style.py`.
+
+| | Reference clip | Checkpoint | + unchanged | + fixes | + fixes and `amp_clean` |
+|---|---|---|---|---|---|
+| Get-up success (of 128) | — | 128 | 30 | 127 | 128 |
+| Peak base vertical speed, m/s | 0.87 | 1.30 | 1.08 | 0.90 | 0.85 |
+| Joint speed p95 / max, rad/s | 3.6 / 12.0 | 5.3 / 16.9 | 6.1 / 20.8 | 4.4 / 11.9 | 4.2 / 11.8 |
+| Height gained in 0.62 s, imagined vs real, cm | — | 10.8 / 7.5 | 14.7 / 4.2 | 11.1 / 11.1 | 14.1 / 13.8 |
+| Walking velocity error at 0.5 m/s, m/s | — | 0.26 | 0.27 | 0.32 | 0.24 |
+| Seconds per iteration, quiet machine | — | — | 0.744 | — | 0.759 |
+
+Every continued run starts from an empty replay buffer, which by itself cost the
+unchanged run most of its get-up. The discriminator still tells the get-up from the
+reference (score −0.63 against +0.46), so the tempo matches the reference and the
+style does not yet. Of the options, the reset refresh keeps the get-up reliable and the
+others set its tempo: refresh alone gave 128 / 128 at 1.64 m/s, the others without it
+93 / 128 at 0.84 m/s.
 
 | Task | Use | Actor input / actions | AMP features |
 |---|---|---|---|

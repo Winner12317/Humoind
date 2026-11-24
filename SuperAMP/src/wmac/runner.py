@@ -54,6 +54,10 @@ from .reference import (is_official, config_protocol, checkpoint_protocol, amp_v
                         imagined_foot_slip_protocol, validate_imagined_foot_slip_resume)
 from .optimizers import (build_reference_optimizer, optimizer_algorithm_name,
                          validate_reference_optimizer_state, set_learning_rate)
+from .recovery_style import (RECOVERY_STYLE_VERSION, RECOVERY_TEMPO_REWARD_TERM, RecoveryTempoCost,
+                             changes_reward, motion_root_fingerprint, recovery_start_mask,
+                             recovery_style_enabled, recovery_style_protocol, recovery_tempo_enabled,
+                             scale_recovery_gradient, validate_recovery_style_resume)
 
 
 def lambda_returns(rewards, continuation, values, gamma=0.99, lam=0.95):
@@ -216,6 +220,24 @@ class WmacRunner:
             self.smooth_reward_terms = SmoothRewardTerms.from_env(env).to(self.device)
             env._wmac_smooth_reward_terms = self.smooth_reward_terms
             env._wmac_smooth_reward_cfg = cfg
+        if getattr(cfg, 'recovery_height_reward_ratio', None) is not None:
+            for term in (self.adapter.reward_cfg['track_root_height'],
+                         env.reward_manager.get_term_cfg('track_root_height')):
+                if float(term.params.get('delay_env_rew_ratio', 1.)) != float(cfg.recovery_height_reward_ratio):
+                    raise ValueError('Configure recovery_height_reward_ratio before creating the environment '
+                                     '(configure_recovery_style_env); real and imagined objectives must match')
+        self.recovery_tempo = None
+        self.recovery_style_migration_history = []
+        self._recovery_gate_closed = False
+        self._imagined_pairs = self._imagined_pair_sink = None
+        if recovery_tempo_enabled(cfg):
+            if RECOVERY_TEMPO_REWARD_TERM not in env.reward_manager.active_terms:
+                raise ValueError('Configure the recovery tempo reward term before creating the environment '
+                                 '(configure_recovery_style_env)')
+            self.recovery_tempo = RecoveryTempoCost.from_reference(
+                self._motion_root() / 'Recovery', cfg, profile=self.adapter.profile,
+                joint_names=env.scene['robot'].joint_names).to(self.device)
+            env._wmac_recovery_tempo = self.recovery_tempo
         if cfg.amp_feature_schema != self.adapter.amp_feature_schema:
             raise ValueError('WMAC AMP schema does not match the environment; select the matching task/profile')
         self.log_dir = Path(log_dir)
@@ -290,6 +312,8 @@ class WmacRunner:
         self._wm_loss_fn = self._compile(self._world_model_loss, 'world model')
         self._imag_step_fn = self._compile(self._imagined_step, 'imagination step')
         self._reward_fn = self._compile(self._trajectory_rewards, 'batched reward/FK')
+        self._reward_pairs_fn = (self._compile(self._trajectory_reward_terms, 'batched reward/FK with AMP pairs')
+                                 if getattr(cfg, 'discriminator_imagined_fraction', 0.) else None)
         self._value_fn = self._compile(self.critic.forward, 'critic')
         print(f'[WMAC] K={cfg.wm_window}, H={cfg.imagination_horizon}, actor_batch={cfg.actor_batch_size}, '
               f'precision={cfg.precision}, compile={cfg.compile}; first calls include compilation', flush=True)
@@ -301,6 +325,11 @@ class WmacRunner:
                   f'{execution} Other heads retain their compilation settings. '
                   f'Router auxiliary coefficients: balance={cfg.moe_load_balance_coef}, z={cfg.moe_router_z_coef}', flush=True)
             print(f'[WMAC] Actor architecture: {json.dumps(actor_architecture(cfg), sort_keys=True)}', flush=True)
+
+    def _motion_root(self):
+        """Reference clips in use: the mirrored cache, a configured directory, or the task's own."""
+        root = getattr(self.env, '_wmac_motion_root', None)
+        return Path(root if root is not None else load_rl_cfg(self.cfg.task).amp_motion_files)
 
     def _compile(self, function, label):
         if not self.cfg.compile:
@@ -495,7 +524,8 @@ class WmacRunner:
         batch_statistics = self.device.type == 'cuda' and is_official(self.cfg)
         for _ in range(self.cfg.wm_updates):
             batch = _device_batch(self.replay.sample_windows(self.cfg.wm_batch_size, self.cfg.wm_window,
-                self.cfg.recovery_fraction, fields=self.WM_FIELDS), self.device)
+                self.cfg.recovery_fraction if getattr(self.cfg, 'wm_recovery_fraction', None) is None
+                else self.cfg.wm_recovery_fraction, fields=self.WM_FIELDS), self.device)
             errors, contact_errors = self._wm_loss_fn(batch['state'], batch['action'], batch['context'],
                 batch['next_state'], batch['contact_cost'], batch['mask'])
             mask = batch['mask']
@@ -542,29 +572,55 @@ class WmacRunner:
                 first, second = self.adapter.amp_features(batch['state']), self.adapter.amp_features(batch['next_state'])
                 ef, es = self.experts.sample(len(first))
                 self.amp_norm.update(torch.cat((first, second, ef, es)))
+        # Imagined negatives replace part of the real ones: the batch size is unchanged.
+        imagined_fraction = getattr(self.cfg, 'discriminator_imagined_fraction', 0.)
+        pool = getattr(self, '_imagined_pairs', None) if imagined_fraction else None
+        imagined_count = min(int(round(size * imagined_fraction)), size - 1) if pool is not None else 0
+        real_count = size - imagined_count
+        interpolated = getattr(self.cfg, 'discriminator_penalty_points', 'expert') == 'interpolated'
         for _ in range(self.cfg.discriminator_updates):
-            batch = _device_batch(self.replay.sample_starts(size,
+            batch = _device_batch(self.replay.sample_starts(real_count,
                 self.cfg.recovery_fraction, fields=('state','next_state')), self.device)
             with torch.no_grad():
                 first, second = self.adapter.amp_features(batch['state']), self.adapter.amp_features(batch['next_state'])
                 policy = torch.cat((self.amp_norm(first), self.amp_norm(second)), -1)
+                if imagined_count:
+                    rows = torch.randint(len(pool[0]), (imagined_count,), device=self.device)
+                    policy = torch.cat((policy, torch.cat((self.amp_norm(pool[0][rows]),
+                                                           self.amp_norm(pool[1][rows])), -1)))
                 ef, es = self.experts.sample(size)
                 expert = torch.cat((self.amp_norm(ef), self.amp_norm(es)), -1)
             # Keep the zero-centered input-gradient penalty in fp32.
-            expert = expert.detach().requires_grad_(True)
-            policy_score, expert_score = self.discriminator(policy), self.discriminator(expert)
-            input_grad = torch.autograd.grad(expert_score.sum(), expert, create_graph=True)[0]
+            if interpolated:
+                # Between each expert and a random negative, instead of on the expert.
+                mix = torch.rand(size, 1, device=self.device)
+                points = (mix * expert + (1 - mix) * policy[torch.randint(len(policy), (size,), device=self.device)]
+                          ).detach().requires_grad_(True)
+                policy_score, expert_score = self.discriminator(policy), self.discriminator(expert)
+                input_grad = torch.autograd.grad(self.discriminator(points).sum(), points, create_graph=True)[0]
+            else:
+                expert = expert.detach().requires_grad_(True)
+                policy_score, expert_score = self.discriminator(policy), self.discriminator(expert)
+                input_grad = torch.autograd.grad(expert_score.sum(), expert, create_graph=True)[0]
             gp = self.cfg.gradient_penalty * input_grad.square().sum(-1).mean()
             loss = .5 * ((expert_score - 1).square().mean() + (policy_score + 1).square().mean()) + gp
             norm, ok = self._optimizer_step(loss, self.opt_disc, self.discriminator)
             if ok and self.cfg.amp_reward_mapping == 'instantamp_centered_tanh_v1':
-                self.amp_reward_stats.update(policy_score, expert_score)
+                # The reward stays centred on simulator transitions only.
+                self.amp_reward_stats.update(policy_score[:real_count], expert_score)
             if self.cfg.amp_normalizer_per_update and ok:
                 self.amp_norm.update(torch.cat((first, second, ef, es)))
-            records.append(torch.stack((loss.detach(), gp.detach(), norm)))
+            record = [loss.detach(), gp.detach(), norm]
+            if imagined_fraction:
+                scores = policy_score.detach().squeeze(-1)
+                record += [scores[:real_count].mean(), scores[real_count:].mean() if imagined_count
+                           else scores.new_full((), float('nan')), scores.new_tensor(imagined_count / size)]
+            records.append(torch.stack(record))
         self.opt_disc.zero_grad(set_to_none=True)
         metrics = torch.stack(records).mean(0)
         keys = ('discriminator_loss','discriminator_grad_penalty','discriminator_grad_norm')
+        if imagined_fraction:
+            keys += ('discriminator_real_score','discriminator_imagined_score','discriminator_imagined_share')
         if self.cfg.amp_reward_mapping == 'instantamp_centered_tanh_v1':
             stats = self.amp_reward_stats
             metrics = torch.cat((metrics, torch.stack((stats.robot_mean, stats.expert_mean,
@@ -616,10 +672,19 @@ class WmacRunner:
             raw = self.smooth_reward_terms(state, next_state, action, previous_action,
                                           previous_previous, current_context)
             task = task - self.adapter.reward_scale * smooth_cost_rate(raw, self.cfg)
+        if getattr(self, 'recovery_tempo', None) is not None:
+            if current_context is None:
+                raise ValueError('Recovery tempo cost requires the pre-transition context')
+            task = task - self.adapter.reward_scale * self.recovery_tempo(state, next_state, current_context)
         return task
 
     def _trajectory_rewards(self, states, contexts, actions, previous, command, terminated, contact,
                             previous_previous=None):
+        return self._trajectory_reward_terms(states, contexts, actions, previous, command, terminated,
+                                             contact, previous_previous)[:3]
+
+    def _trajectory_reward_terms(self, states, contexts, actions, previous, command, terminated, contact,
+                                 previous_previous=None):
         # One batched FK over H+1 states; shared by task and both AMP pair ends.
         fk = self.adapter.analyze_state(states)
         features = self.adapter.amp_features(states, kinematics=fk)
@@ -633,7 +698,22 @@ class WmacRunner:
             style, score = self._amp_reward(first[start:start+self.cfg.reward_chunk_size],
                                             second[start:start+self.cfg.reward_chunk_size])
             styles.append(style); scores.append(score)
-        return task, torch.cat(styles).reshape_as(task), torch.cat(scores).reshape_as(task)
+        return task, torch.cat(styles).reshape_as(task), torch.cat(scores).reshape_as(task), first, second
+
+    @torch.no_grad()
+    def _keep_imagined_pairs(self, first, second, alive):
+        """Keep a sample of this rollout's imagined AMP pairs as discriminator negatives.
+
+        ``first``/``second`` are the flattened (H*B) pair ends of the rollout,
+        ``alive`` the (H, B) survival weight at the start of each transition.
+        Pairs after an imagined termination are not sampled.
+        """
+        weight = (alive.detach().flatten() > .5).float()
+        count = int(round(self.cfg.effective_discriminator_batch_size * self.cfg.discriminator_imagined_fraction))
+        if not count or not bool(weight.any()):
+            return
+        rows = torch.multinomial(weight, count * self.cfg.discriminator_updates, replacement=True)
+        self._imagined_pair_sink.append((first.detach()[rows].float(), second.detach()[rows].float()))
 
     def imagine(self, batch, noises=None):
         state, context = batch['state'], batch['context']
@@ -643,6 +723,9 @@ class WmacRunner:
         noises = self._observation_noise(len(state)) if noises is None else noises
         step_fn = self._imag_step_fn if torch.is_grad_enabled() else self._imagined_step
         reward_fn = self._reward_fn if torch.is_grad_enabled() else self._trajectory_rewards
+        keep_pairs = getattr(self, '_imagined_pair_sink', None) is not None
+        if keep_pairs:
+            reward_fn = self._reward_pairs_fn if torch.is_grad_enabled() else self._trajectory_reward_terms
         for step in range(self.cfg.imagination_horizon):
             previous_actions.append(previous)
             state, action, context, done, contact, history = step_fn(state, context, history, command, noises[step])
@@ -655,11 +738,11 @@ class WmacRunner:
         if smooth_rewards_enabled(self.cfg):
             initial_older = previous_previous_action(batch['actor_history'])
             older_actions = torch.cat((initial_older.unsqueeze(0), previous_actions[:-1]), 0)
-            task, style, score = reward_fn(states, contexts, actions, previous_actions,
-                                          command, terminated, contacts, older_actions)
+            task, style, score, *pairs = reward_fn(states, contexts, actions, previous_actions,
+                                                   command, terminated, contacts, older_actions)
         else:
-            task, style, score = reward_fn(states, contexts, actions, previous_actions,
-                                          command, terminated, contacts)
+            task, style, score, *pairs = reward_fn(states, contexts, actions, previous_actions,
+                                                   command, terminated, contacts)
         direct_style = style if self.cfg.direct_style_grad else style.detach()
         rewards = self.cfg.task_weight * task + self.cfg.style_weight * direct_style
         continuation = 1 - terminated
@@ -669,11 +752,19 @@ class WmacRunner:
         c_t = torch.cat((torch.ones_like(alive[:1]), alive[:-1]),0)
         discounts = self.cfg.gamma ** torch.arange(self.cfg.imagination_horizon,device=self.device,dtype=torch.float32)
         objective = (discounts[:,None] * c_t * rewards).sum(0)
+        if keep_pairs:
+            self._keep_imagined_pairs(*pairs, c_t)
         previous_states = torch.cat((batch['previous_action'].unsqueeze(0), actions),0)
         critic_x = self.adapter.critic_features(states, previous_states,
             command.unsqueeze(0).expand(states.shape[0],-1,-1), contexts)
+        terminal_gradient = []
         if self.cfg.critic_bootstrap:
-            objective = objective + self.cfg.gamma**self.cfg.imagination_horizon * alive[-1] * self._cap_values(self._value(critic_x[-1]))
+            # Recovery starts may weigh the terminal value's state gradient down
+            # (recovery_value_grad_scale); the value in the objective is unchanged.
+            terminal_x = scale_recovery_gradient(critic_x[-1],
+                recovery_start_mask(batch['state'], batch['context'], self.recovery_height),
+                getattr(self.cfg, 'recovery_value_grad_scale', 1.), terminal_gradient)
+            objective = objective + self.cfg.gamma**self.cfg.imagination_horizon * alive[-1] * self._cap_values(self._value(terminal_x))
         # Targets are cached before any optimizer step and never train other nets.
         with torch.no_grad():
             old_values = self._value(critic_x.detach())
@@ -682,7 +773,8 @@ class WmacRunner:
             targets = self._cap_values(targets)
         return {'objective':objective, 'x':critic_x[:-1].detach(), 'targets':targets.detach(),
                 'task':task.detach(), 'style':style.detach(), 'score':score.detach(),
-                'survival':alive[-1].detach(), 'first_action':actions[0]}
+                'survival':alive[-1].detach(), 'first_action':actions[0],
+                'terminal_gradient':terminal_gradient}
 
     def _real_critic_batch(self, size):
         # This auxiliary TD anchor is an engineering extension, not the paper's
@@ -749,12 +841,21 @@ class WmacRunner:
         size = self.cfg.actor_microbatch_size or self.cfg.actor_batch_size
         records, xs, ys, router_records = [], [], [], []
         finite_loss = True
+        # While the recovery model error is above its gate, recovery starts are left
+        # out of the actor objective; their rollouts still give critic targets.
+        gate_closed = update_actor and getattr(self, '_recovery_gate_closed', False)
+        terminal_gradients = []
+        if getattr(self.cfg, 'discriminator_imagined_fraction', 0.):
+            self._imagined_pair_sink = []
         with frozen_parameters(self.world_model,self.discriminator,self.critic):
             for start in range(0,len(batch['state']),size):
                 chunk = {key:value[start:start+size] for key,value in batch.items()}
                 with torch.set_grad_enabled(update_actor):
                     rollout = self.imagine(chunk)
-                    task_loss = -rollout['objective'].mean()
+                    objective = rollout['objective']
+                    if gate_closed:
+                        objective = objective * (~recovery[start:start+size]).to(objective.dtype)
+                    task_loss = -objective.mean()
                     auxiliary = task_loss.new_zeros(())
                     if is_moe(self.actor) and update_actor:
                         balance, z, _ = router_losses(self.actor, chunk['actor_history'], full_router_load)
@@ -773,6 +874,9 @@ class WmacRunner:
                         finite_loss = finite_loss and finite
                         if finite:
                             (loss * (len(chunk['state'])/len(batch['state']))).backward()
+                            # Per-start norm of d objective / d x_H, undoing the batch mean.
+                            terminal_gradients += [value * len(batch['state'])
+                                                   for value in rollout.get('terminal_gradient', ())]
                 xs.append(rollout['x']); ys.append(rollout['targets'])
                 if self.cfg.amp_reward_mapping == 'instantamp_centered_tanh_v1':
                     # Measures the actual score-to-reward derivative, including
@@ -790,13 +894,22 @@ class WmacRunner:
             router_stats.update(moe_router_grad_norm=parameter_grad_norm(self.actor.router),
                                 moe_expert_grad_norm_mean=sum(expert_norms)/len(expert_norms),
                                 moe_expert_grad_norm_max=max(expert_norms))
+        sink = getattr(self, '_imagined_pair_sink', None)
+        if sink is not None:
+            self._imagined_pair_sink = None
+            if sink:
+                self._imagined_pairs = tuple(torch.cat(parts) for parts in zip(*sink))
         norm, stepped = old_action.new_zeros(()), False
         if update_actor and finite_loss:
             norm, stepped = self._optimizer_step(None,self.opt_actor,self.actor,actor=True,backward=False)
         with torch.no_grad():
-            shift = (self.actor(batch['actor_history'])-old_action).square().mean().sqrt()
+            squared_shift = (self.actor(batch['actor_history'])-old_action).square().mean(-1)
+            shift = squared_shift.mean().sqrt()
+            recovery_shift = ((squared_shift*recovery).sum()/recovery.sum().clamp_min(1)).sqrt()
+        recovery_limit = getattr(self.cfg, 'recovery_max_action_shift', None)
         rejected = update_actor and (not stepped or not bool(torch.isfinite(shift)) or
-            (not is_official(self.cfg) and float(shift)>self.cfg.max_action_shift))
+            (not is_official(self.cfg) and float(shift)>self.cfg.max_action_shift) or
+            (recovery_limit is not None and float(recovery_shift)>recovery_limit))
         if rejected:
             with torch.no_grad():
                 for parameter, saved in zip(self.actor.parameters(),parameter_snapshot): parameter.copy_(saved)
@@ -810,6 +923,11 @@ class WmacRunner:
                            'style_zero_gradient_fraction','imagined_survival'),values))
         result.update(actor_grad_norm=float(norm),actor_action_shift=float(shift),actor_update_rejected=float(rejected),
                       critic_loss=0.,real_critic_loss=0.,critic_grad_norm=0.,critic_updates_applied_fraction=0.)
+        walk_gradient, recovery_gradient = (torch.stack(terminal_gradients).nanmean(0).cpu().tolist()
+                                            if terminal_gradients else (0., 0.))
+        result.update(actor_recovery_action_shift=float(recovery_shift),
+                      recovery_gate_closed=float(gate_closed),
+                      terminal_value_grad_walk=walk_gradient, terminal_value_grad_recovery=recovery_gradient)
         task_loss, auxiliary_loss = (sum(n*v for n,v in router_records)/len(batch['state'])).cpu().tolist()
         router_stats.update(actor_task_loss=task_loss, actor_router_aux_loss=auxiliary_loss)
         result.update(router_stats)
@@ -869,6 +987,16 @@ class WmacRunner:
             return bool(errors) and max(errors)<=self.cfg.max_validation_model_error and self.validation['validation_contact_error']<=self.cfg.max_validation_contact_error
         return True
 
+    def _recovery_gate(self, row):
+        """True while the recovery model error (training or held-out) exceeds its gate."""
+        limit = getattr(self.cfg, 'recovery_model_error_gate', None)
+        if limit is None:
+            return False
+        errors = [value for value in (row.get('wm_recovery_error', float('nan')),
+                                      self.validation.get('validation_recovery_error', float('nan')))
+                  if math.isfinite(value)]
+        return bool(errors) and max(errors) > limit
+
     def _log(self,row):
         row={'iteration':self.iteration,'wall_seconds':self.wall_time,'sim_steps':self.sim_steps,
              'imagination_steps':self.imagination_steps,**row}
@@ -906,10 +1034,14 @@ class WmacRunner:
                     'real_critic_loss','critic_grad_norm','critic_updates_applied_fraction','imagined_task_reward',
                     'imagined_style_reward','style_zero_gradient_fraction','imagined_survival')
                 actor_keys = (*actor_keys, *routing_metric_keys(getattr(self, 'actor', None)))
-                row.update({key:0. for key in actor_keys})
+                style_keys = ('actor_recovery_action_shift','recovery_gate_closed',
+                              'terminal_value_grad_walk','terminal_value_grad_recovery')
+                row.update({key:0. for key in (*actor_keys, *style_keys)})
+                self._recovery_gate_closed = self._recovery_gate(row)
                 if active or calibrate:
                     samples=[self.update_actor_critic(update_actor=active) for _ in range(self.cfg.actor_updates)]
                     row.update({key:float(np.mean([sample[key] for sample in samples])) for key in actor_keys})
+                    row.update({key:float(np.mean([sample.get(key, 0.) for sample in samples])) for key in style_keys})
                     if calibrate and row['critic_updates_applied_fraction']==1. and math.isfinite(row['critic_loss']):
                         self.critic_calibration_updates += 1
                 self._sync();t4=time.perf_counter();self.iteration=iteration+1
@@ -955,6 +1087,17 @@ class WmacRunner:
                     scope=content['motion_scope'], walking_clips=manifest['walking_total_clips'],
                     recovery_clips=manifest['recovery_original_clips'])
 
+    def _reference_motion_metadata(self):
+        """Content of a configured reference motion directory; None for the task's own."""
+        root = getattr(self.cfg, 'reference_motion_root', None)
+        if root is None:
+            return None
+        if getattr(self, '_reference_motion_fingerprint', None) is None:
+            from .recovery_style import resolve_motion_root
+            self._reference_motion_fingerprint = motion_root_fingerprint(
+                resolve_motion_root(root, Path(__file__).resolve().parents[2]))
+        return self._reference_motion_fingerprint
+
     def save(self,path,export=True):
         path=Path(path)
         elapsed = self.wall_time
@@ -967,8 +1110,12 @@ class WmacRunner:
         if smooth_rewards_enabled(self.cfg):
             actor_version = 12
         foot_slip = imagined_foot_slip_protocol(self.cfg)
-        if foot_slip['imagined_recovery_foot_slip'] in IMAGINED_FOOT_SLIP_GEOMETRIC_MODES:
+        geometric_foot_slip = foot_slip['imagined_recovery_foot_slip'] in IMAGINED_FOOT_SLIP_GEOMETRIC_MODES
+        if geometric_foot_slip:
             actor_version = 13
+        recovery_style = recovery_style_enabled(self.cfg)
+        if recovery_style:
+            actor_version = RECOVERY_STYLE_VERSION
         payload={'format':'amp-wmac-v1','implementation_version':actor_version,'config':asdict(self.cfg),
             'training_protocol':config_protocol(self.cfg),
             'amp_reward_protocol':amp_reward_protocol(self.cfg),
@@ -1008,9 +1155,15 @@ class WmacRunner:
             payload['amp_reward_state'] = self.amp_reward_stats.state_dict()
         if smooth_rewards_enabled(self.cfg):
             payload['smooth_reward_model'] = self.smooth_reward_terms.metadata()
-        if actor_version == 13:
+        if geometric_foot_slip:
             payload['imagined_foot_slip_protocol'] = foot_slip
             payload['imagined_foot_slip_migration_history'] = getattr(self, 'imagined_foot_slip_migration_history', [])
+        if recovery_style:
+            payload['recovery_style_protocol'] = recovery_style_protocol(self.cfg)
+            payload['recovery_style_migration_history'] = getattr(self, 'recovery_style_migration_history', [])
+            payload['reference_motion_dataset'] = self._reference_motion_metadata()
+            if getattr(self, 'recovery_tempo', None) is not None:
+                payload['recovery_tempo_model'] = self.recovery_tempo.metadata()
         if self.cfg.checkpoint_replay:payload['replay']=self.replay.state_dict()
         temporary=path.with_suffix('.pt.tmp');torch.save(payload,temporary);os.replace(temporary,path)
         if export:self.export_policy(path.parent/'policy.onnx')
@@ -1027,6 +1180,20 @@ class WmacRunner:
         smooth_migrated = validate_smooth_reward_resume(payload, self.cfg)
         smooth_retuned = validate_smooth_reward_retune(payload, self.cfg)
         foot_slip_migrated = validate_imagined_foot_slip_resume(payload, self.cfg)
+        style_changes = validate_recovery_style_resume(payload, self.cfg)
+        saved_reference, reference = payload.get('reference_motion_dataset'), self._reference_motion_metadata()
+        reference_changed = saved_reference != reference
+        style_authorized = getattr(self.cfg, 'allow_recovery_style_migration', False) is True
+        if reference_changed and not style_authorized:
+            raise ValueError('Reference motion directory differs from the checkpoint; pass '
+                             '--allow-recovery-style-migration to fork it onto other reference clips')
+        style_migrated = bool(style_changes) or reference_changed
+        reward_changed = changes_reward(style_changes)
+        if reward_changed and getattr(self.replay, 'size', 0):
+            raise ValueError('A recovery reward change requires an empty target replay')
+        tempo = getattr(self, 'recovery_tempo', None)
+        if tempo is not None and not style_migrated and payload.get('recovery_tempo_model') != tempo.metadata():
+            raise ValueError('Recovery tempo limits differ from the saved ones; the Recovery reference clips changed')
         if smooth_rewards_enabled(self.cfg):
             expected = self.smooth_reward_terms.metadata()
             if not smooth_migrated and payload.get('smooth_reward_model') != expected:
@@ -1039,10 +1206,10 @@ class WmacRunner:
             expected_optimizers = {name:optimizer_algorithm_name(getattr(self,name)) for name in ('opt_actor','opt_critic','opt_model','opt_disc')}
             if payload.get('optimizer_algorithms') != expected_optimizers:
                 raise ValueError('Checkpoint optimizer algorithms conflict with the requested runtime')
-            if payload.get('motion_dataset') != self._motion_dataset_metadata():
+            if payload.get('motion_dataset') != self._motion_dataset_metadata() and not reference_changed:
                 raise ValueError('Checkpoint mirrored motion content differs from the configured dataset')
             expected_cap = amp_value_upper_bound(self.adapter,self.cfg) if is_official(self.cfg) else None
-            if payload.get('critic_value_upper_bound') != expected_cap:
+            if payload.get('critic_value_upper_bound') != expected_cap and not reward_changed:
                 raise ValueError('Checkpoint critic reward upper bound differs from the configured AMP objective')
         for name in ('opt_actor','opt_critic','opt_model'):
             optimizer = getattr(self,name)
@@ -1107,7 +1274,8 @@ class WmacRunner:
         self.env.common_step_counter=payload.get('env_common_step_counter',0)
         self.best_eval_score=payload.get('best_eval_score')
         self.critic_calibration_updates=payload.get('critic_calibration_updates',0)
-        discard_replay = (smooth_migrated or smooth_retuned or 'recovery_height_reward' in semantic_changes) and 'replay' in payload
+        discard_replay = (smooth_migrated or smooth_retuned or reward_changed
+                          or 'recovery_height_reward' in semantic_changes) and 'replay' in payload
         if 'replay' in payload and not discard_replay:
             self.replay.load_state_dict(payload['replay']);self.replay.mark_boundary()
         self.recovery_semantics_history = list(payload.get('recovery_semantics_history', []))
@@ -1116,6 +1284,26 @@ class WmacRunner:
         self.smooth_reward_migration_history = list(payload.get('smooth_reward_migration_history', []))
         self.smooth_reward_retune_history = list(payload.get('smooth_reward_retune_history', []))
         self.imagined_foot_slip_migration_history = list(payload.get('imagined_foot_slip_migration_history', []))
+        self.recovery_style_migration_history = list(payload.get('recovery_style_migration_history', []))
+        if style_migrated:
+            record = {
+                'kind': 'explicit_recovery_style_migration', 'source_checkpoint': str(Path(path).resolve()),
+                'source_sha256': self._checkpoint_sha256(path), 'source_iteration': self.iteration,
+                'changes': style_changes,
+                'reference_motion_dataset': {'source': saved_reference, 'target': reference},
+                'networks_optimizers_and_ema_preserved': True, 'saved_replay_discarded': discard_replay,
+                'replay_note': ('Saved task reward labels use the previous recovery rewards.'
+                                if reward_changed else None),
+                'critic_transition': 'Existing critic fits new imagined lambda returns; no added supervision.',
+                'extra_warmup_iterations': 0,
+            }
+            self.recovery_style_migration_history.append(record)
+            self._cost_trajectory_id = str(uuid.uuid4())
+            self.best_eval_score = None
+            if hasattr(self, 'log_dir'):
+                (self.log_dir / 'recovery_style_migration.json').write_text(json.dumps(record, indent=2) + '\n')
+            print(f'[WMAC] Explicit recovery-style fork: {style_changes or "reference clips"}; '
+                  f'networks/optimizers preserved, saved replay discarded={discard_replay}.', flush=True)
         if foot_slip_migrated:
             record = {
                 'kind': 'explicit_imagined_foot_slip_migration', 'source_checkpoint': str(Path(path).resolve()),
@@ -1252,6 +1440,9 @@ class WmacRunner:
                  '--checkpoint',str(checkpoint),'--mode','both','--seed','2026','--num-envs',str(self.cfg.evaluation_envs),
                  '--steps',str(self.cfg.evaluation_steps),'--device',str(self.device),
                  '--recovery-height-reward',self.cfg.recovery_height_reward,'--output',str(output)]
+        if getattr(self.cfg, 'reference_motion_root', None):
+            # Start recovery evaluation from the same reference frames as training.
+            command += ['--reference-motion-root', self.cfg.reference_motion_root]
         if self.device.type=='cuda':torch.cuda.empty_cache()
         with (self.log_dir/f'evaluation_{self.iteration}.log').open('w') as log:
             subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,check=True)

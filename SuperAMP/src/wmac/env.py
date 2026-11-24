@@ -65,6 +65,8 @@ class CaptureEnv(ManagerBasedRlEnv):
         if getattr(self, '_wmac_smooth_reward_terms', None) is not None:
             # Reuse captured physical state/history for the reward manager.
             self._wmac_smooth_start = start
+        if getattr(self, '_wmac_recovery_tempo', None) is not None:
+            self._wmac_step_start = start
         self._physical_end = None
         self._capture_enabled = True
         try:
@@ -72,6 +74,7 @@ class CaptureEnv(ManagerBasedRlEnv):
         finally:
             self._capture_enabled = False
             self._wmac_smooth_start = None
+            self._wmac_step_start = None
         if self._physical_end is None:
             raise RuntimeError("Pre-reset transition capture did not run")
         with torch.no_grad():

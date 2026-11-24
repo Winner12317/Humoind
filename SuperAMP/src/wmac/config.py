@@ -112,6 +112,23 @@ class WmacConfig:
     allow_recovery_semantics_migration: bool = False
     recovery_fraction: float = 0.5
     expert_recovery_fraction: float = 0.5
+    # Opt-in fixes for abrupt, off-reference get-ups; see src/wmac/recovery_style.py.
+    # The defaults are the historical behaviour.
+    recovery_value_grad_scale: float = 1.0
+    recovery_height_reward_ratio: float | None = None
+    recovery_tempo_mode: str = "none"
+    recovery_tempo_base_rise_limit: float = 0.9
+    recovery_tempo_base_rise_coef: float = 10.0
+    recovery_tempo_joint_speed_percentile: float = 99.0
+    recovery_tempo_joint_speed_coef: float = 0.02
+    discriminator_imagined_fraction: float = 0.0
+    discriminator_penalty_points: str = "expert"
+    recovery_refresh_seconds: float | None = None
+    wm_recovery_fraction: float | None = None
+    recovery_model_error_gate: float | None = None
+    recovery_max_action_shift: float | None = None
+    reference_motion_root: str | None = None
+    allow_recovery_style_migration: bool = False
     max_model_loss_for_actor: float = 20.0
     actor_trust_coef: float = 0.0
     real_critic_coef: float = 0.5
@@ -265,6 +282,10 @@ class WmacConfig:
         robot = profile_for_task(self.task)
         if robot is not G1 and self.motion_cache_root == G1.mirrored_motion_cache:
             self.motion_cache_root = robot.mirrored_motion_cache
+        if self.reference_motion_root and self.motion_cache_root == robot.mirrored_motion_cache:
+            # A mirrored cache belongs to one source directory.
+            from pathlib import Path
+            self.motion_cache_root += "__" + Path(self.reference_motion_root).expanduser().resolve().name
 
     @property
     def effective_discriminator_batch_size(self) -> int:
@@ -308,6 +329,15 @@ class WmacConfig:
         amp_reward_protocol(self)
         smooth_reward_protocol(self)
         imagined_foot_slip_protocol(self)
+        from .recovery_style import recovery_style_protocol
+        recovery_style_protocol(self)
+        if self.reference_motion_root is not None and (
+                not isinstance(self.reference_motion_root, str) or not self.reference_motion_root):
+            raise ValueError("reference_motion_root must be None or a nonempty path")
+        if not isinstance(self.allow_recovery_style_migration, bool):
+            raise ValueError("allow_recovery_style_migration must be a bool")
+        if self.allow_recovery_style_migration and not self.resume:
+            raise ValueError("Recovery-style migration requires --resume")
         if not isinstance(self.allow_imagined_foot_slip_migration, bool):
             raise ValueError("allow_imagined_foot_slip_migration must be a bool")
         if self.allow_imagined_foot_slip_migration and not self.resume:

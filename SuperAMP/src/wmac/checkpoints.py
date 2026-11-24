@@ -119,7 +119,8 @@ def resolve_checkpoint_config(payload) -> WmacConfig:
         cfg.moe_top_k, cfg.moe_gate_hidden = 2, (256,)
         cfg.moe_load_balance_coef, cfg.moe_router_z_coef = .01, .001
     for field in fields(cfg):
-        if field.name in saved and field.name not in ("allow_recovery_semantics_migration", "allow_amp_reward_migration", "allow_smooth_reward_migration", "allow_smooth_reward_retune", "allow_imagined_foot_slip_migration"):
+        if field.name in saved and field.name not in ("allow_recovery_semantics_migration", "allow_amp_reward_migration", "allow_smooth_reward_migration", "allow_smooth_reward_retune", "allow_imagined_foot_slip_migration",
+                                                         "allow_recovery_style_migration"):
             value = saved[field.name]
             if isinstance(getattr(cfg, field.name), tuple) and isinstance(value, (tuple, list)):
                 value = tuple(value)
@@ -137,6 +138,7 @@ def resolve_checkpoint_config(payload) -> WmacConfig:
     cfg.allow_amp_reward_migration = False
     cfg.allow_smooth_reward_migration = False
     cfg.allow_smooth_reward_retune = False
+    cfg.allow_recovery_style_migration = False
     if "actor_betas" not in saved:
         groups = payload.get("opt_actor", {}).get("param_groups", [])
         if groups and "betas" in groups[0]:

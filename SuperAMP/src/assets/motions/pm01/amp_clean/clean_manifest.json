@@ -1,0 +1,134 @@
+{
+  "format": "recovery-reference-clean-v1",
+  "robot": "pm01",
+  "source_root": "src/assets/motions/pm01/amp",
+  "settings": {
+    "contact_band": 0.01,
+    "floor_clearance": 0.0,
+    "self_clearance": 0.0,
+    "smooth_frames": 2.0,
+    "iterations": 30
+  },
+  "costs": {
+    "kept_clearance": 100.0,
+    "root_xyz_rotation": [
+      1000.0,
+      1000.0,
+      30.0,
+      100.0,
+      100.0,
+      100.0
+    ],
+    "joint": 1.0
+  },
+  "source_sha256": {
+    "Recovery/fallAndGetUp1_subject1.npz": "3b904d27db27907db8faffbeb4617d2f19c896b50b5d95f624409cf9a36fd21b",
+    "WalkandRun/arc_jog_left_loop_002__A029.npz": "17bf4bc9e297968eb0715a1e8962027bc0349fdc4f84ea91df91a3ecea97d81b",
+    "WalkandRun/arc_walk_left_loop_001__A029.npz": "8dbaac36c91700bbb8aa93f6a476adc7fe781567f9f26f0a2351958bc508c01d",
+    "WalkandRun/idle_turn_270_001__A048.npz": "28fd1e47fab2688b4087a5670595fed90c8898211aea2200f73c6ea3dd8b9032",
+    "WalkandRun/idle_turn_360_001__A047.npz": "fc3bc7735ad42b09f5c40950188b76ede67925a393cefc5e7a3a2fd2b99c915f",
+    "WalkandRun/jog_arc_cw_loop_004__A045.npz": "385aef584764b0e35778a25a3fa80ee23817a8bdb2de6a74bcd9792a800d25f9",
+    "WalkandRun/jog_backward_loop_002__A022.npz": "8d7c24a9241b460fd085dc1cd377f1b63e78ffe0654cd2f608667161fd62b98a",
+    "WalkandRun/jog_backward_loop_003__A023.npz": "a201886d978cbfa9fc96ae03c0e7fdccb13ffa1fb6bcf1009f1108683a46a287",
+    "WalkandRun/jog_forward_loop_003__A021.npz": "f0502ddff85a2a4e28910a6bb0f55164fcd4df287b1be70c91f8b599503fac64",
+    "WalkandRun/jog_forward_loop_003__A022.npz": "211337cb55364563260076d658a7ff256c3d4b90bb51616237d59d146aecb87e",
+    "WalkandRun/step_rotate_idle_000_002__A026.npz": "07d38a14dd2394fc3ef7371f02b1ce38e6dd1752f957ba1ac1f0a6b03c1e346c",
+    "WalkandRun/walk_arc_cw_loop_002__A046.npz": "6c6fde9f1328f9c22accee9e880e3a465b693008454d4117da0235f437aa04b5",
+    "WalkandRun/walk_backward_loop_001__A022.npz": "b885181915523ac6d92594a3dfef80d5d8887e1faec88346be223ff555297b05",
+    "WalkandRun/walk_backward_loop_001__A024.npz": "d35627c22dc8d604700d8c66e0742d74fabab621f74f5aaeac04a2be18e90693",
+    "WalkandRun/walk_forward_loop_002__A022.npz": "345d010bac2e8af301c1d78e23e7ad758257fff663912d59cd1009de16f0c4b9",
+    "WalkandRun/walk_forward_loop_002__A024.npz": "6ba991d8ad3adeeb72a58626c1fc52a06f8643c86f6cec32649e4fc118d5e9bd",
+    "WalkandRun/walk_sideway_left_loop_002__A021.npz": "3f13b65343452bbcb88317e76cf6ce741e5e600be2b8eafd6bab5ea37f0ed8c4",
+    "WalkandRun/walk_sideway_right_loop_001__A022.npz": "39c99060e53de0fd16200ab45ed5d60989f6b2e1da4cee61a7c5bd97f4edc734"
+  },
+  "output_sha256": {
+    "Recovery/fallAndGetUp1_subject1.npz": "f269b1659ceda2e323a5c8dae431dc3393f3a65dffd22b97772ab8d5c58f444a",
+    "WalkandRun/arc_jog_left_loop_002__A029.npz": "17bf4bc9e297968eb0715a1e8962027bc0349fdc4f84ea91df91a3ecea97d81b",
+    "WalkandRun/arc_walk_left_loop_001__A029.npz": "8dbaac36c91700bbb8aa93f6a476adc7fe781567f9f26f0a2351958bc508c01d",
+    "WalkandRun/idle_turn_270_001__A048.npz": "28fd1e47fab2688b4087a5670595fed90c8898211aea2200f73c6ea3dd8b9032",
+    "WalkandRun/idle_turn_360_001__A047.npz": "fc3bc7735ad42b09f5c40950188b76ede67925a393cefc5e7a3a2fd2b99c915f",
+    "WalkandRun/jog_arc_cw_loop_004__A045.npz": "385aef584764b0e35778a25a3fa80ee23817a8bdb2de6a74bcd9792a800d25f9",
+    "WalkandRun/jog_backward_loop_002__A022.npz": "8d7c24a9241b460fd085dc1cd377f1b63e78ffe0654cd2f608667161fd62b98a",
+    "WalkandRun/jog_backward_loop_003__A023.npz": "a201886d978cbfa9fc96ae03c0e7fdccb13ffa1fb6bcf1009f1108683a46a287",
+    "WalkandRun/jog_forward_loop_003__A021.npz": "f0502ddff85a2a4e28910a6bb0f55164fcd4df287b1be70c91f8b599503fac64",
+    "WalkandRun/jog_forward_loop_003__A022.npz": "211337cb55364563260076d658a7ff256c3d4b90bb51616237d59d146aecb87e",
+    "WalkandRun/step_rotate_idle_000_002__A026.npz": "07d38a14dd2394fc3ef7371f02b1ce38e6dd1752f957ba1ac1f0a6b03c1e346c",
+    "WalkandRun/walk_arc_cw_loop_002__A046.npz": "6c6fde9f1328f9c22accee9e880e3a465b693008454d4117da0235f437aa04b5",
+    "WalkandRun/walk_backward_loop_001__A022.npz": "b885181915523ac6d92594a3dfef80d5d8887e1faec88346be223ff555297b05",
+    "WalkandRun/walk_backward_loop_001__A024.npz": "d35627c22dc8d604700d8c66e0742d74fabab621f74f5aaeac04a2be18e90693",
+    "WalkandRun/walk_forward_loop_002__A022.npz": "345d010bac2e8af301c1d78e23e7ad758257fff663912d59cd1009de16f0c4b9",
+    "WalkandRun/walk_forward_loop_002__A024.npz": "6ba991d8ad3adeeb72a58626c1fc52a06f8643c86f6cec32649e4fc118d5e9bd",
+    "WalkandRun/walk_sideway_left_loop_002__A021.npz": "3f13b65343452bbcb88317e76cf6ce741e5e600be2b8eafd6bab5ea37f0ed8c4",
+    "WalkandRun/walk_sideway_right_loop_001__A022.npz": "39c99060e53de0fd16200ab45ed5d60989f6b2e1da4cee61a7c5bd97f4edc734"
+  },
+  "clips": {
+    "fallAndGetUp1_subject1.npz": {
+      "fps": 50.0,
+      "reexport_max_abs_difference": {
+        "joint_pos": 0.0,
+        "joint_vel": 1.9073486328125e-06,
+        "body_pos_w": 9.5367431640625e-07,
+        "body_quat_w": 2.086162567138672e-07,
+        "body_lin_vel_w": 7.3909759521484375e-06,
+        "body_ang_vel_w": 1.0192394256591797e-05
+      },
+      "before": {
+        "frames": 2575,
+        "frames_on_ground": 925,
+        "floor_over_1cm_share_on_ground": 0.0238,
+        "floor_over_1cm_share_upright": 0.0006,
+        "floor_over_1mm_share": 0.0377,
+        "floor_max_m": 0.0743,
+        "floor_worst": [
+          79,
+          "head_collision"
+        ],
+        "self_over_1cm_share": 0.0396,
+        "self_over_1mm_share": 0.1103,
+        "self_max_m": 0.0675,
+        "self_worst": [
+          1900,
+          [
+            "left_thigh_collision",
+            "right_foot_sole_collision"
+          ]
+        ],
+        "joint_speed_p99_rad_s": 6.507,
+        "joint_speed_max_rad_s": 23.919
+      },
+      "after": {
+        "frames": 2575,
+        "frames_on_ground": 918,
+        "floor_over_1cm_share_on_ground": 0.0,
+        "floor_over_1cm_share_upright": 0.0,
+        "floor_over_1mm_share": 0.0,
+        "floor_max_m": 0.0,
+        "floor_worst": [
+          354,
+          "left_foot_sole_collision"
+        ],
+        "self_over_1cm_share": 0.0,
+        "self_over_1mm_share": 0.0,
+        "self_max_m": 0.0,
+        "self_worst": [
+          1390,
+          [
+            "left_hip_pitch_collision",
+            "left_forearm_collision"
+          ]
+        ],
+        "joint_speed_p99_rad_s": 6.512,
+        "joint_speed_max_rad_s": 23.967
+      },
+      "change": {
+        "frames_changed_share": 0.2641,
+        "root_height_max_m": 0.0643,
+        "root_horizontal_max_m": 0.0,
+        "root_rotation_max_rad": 0.0203,
+        "joint_max_rad": 0.3706,
+        "joint_mean_abs_rad_changed_frames": 0.0029,
+        "largest_joint": "J12_WAIST_YAW"
+      }
+    }
+  }
+}

@@ -30,6 +30,8 @@ from src.wmac.reference import (OFFICIAL_REPOSITORY, OFFICIAL_COMMIT, MIRROR_REF
                                 imagined_foot_slip_protocol, IMAGINED_FOOT_SLIP_GEOMETRY,
                                 IMAGINED_FOOT_SLIP_GEOMETRIC_MODES,
                                 HOST_COMMIT, HUMANUP_COMMIT)
+from src.wmac.recovery_style import (recovery_style_enabled, recovery_style_protocol,
+                                     validate_recovery_style_resume)
 
 
 def parse_config(argv: list[str] | None = None) -> WmacConfig:
@@ -82,10 +84,13 @@ def parse_config(argv: list[str] | None = None) -> WmacConfig:
         raise ValueError("--allow-imagined-foot-slip-migration requires --resume")
     smooth_migrated = False
     smooth_retuned = False
+    if source_protocol is None and cfg.allow_recovery_style_migration:
+        raise ValueError("--allow-recovery-style-migration requires --resume")
     if source_protocol is not None:
         validate_training_protocol_resume(payload, cfg)
         smooth_migrated = validate_smooth_reward_resume(payload, cfg)
         smooth_retuned = validate_smooth_reward_retune(payload, cfg)
+        validate_recovery_style_resume(payload, cfg)
     elif cfg.allow_smooth_reward_retune:
         raise ValueError("--allow-smooth-reward-retune requires --resume from an active smooth checkpoint")
     if source_actor_architecture is not None and actor_architecture(cfg) != source_actor_architecture:
@@ -130,6 +135,9 @@ def source_snapshot(log_dir: Path) -> None:
     metadata["actor_architecture"] = actor_architecture(config)
     metadata["amp_reward_protocol"] = amp_reward_protocol(config)
     metadata["smooth_reward_protocol"] = smooth_reward_protocol(config)
+    if recovery_style_enabled(config):
+        metadata["recovery_style_protocol"] = recovery_style_protocol(config)
+        metadata["reference_motion_root"] = config.get("reference_motion_root")
     foot_slip = imagined_foot_slip_protocol(config)
     foot_slip_mode = foot_slip['imagined_recovery_foot_slip']
     if foot_slip_mode in IMAGINED_FOOT_SLIP_GEOMETRIC_MODES:
@@ -185,6 +193,18 @@ def source_snapshot(log_dir: Path) -> None:
         shutil.copy2(REPO / "scripts" / name, target / name)
 
 
+def configure_reference_motion_root(cfg, env_cfg):
+    """Point resets at a configured reference directory; None keeps the task's own."""
+    if not getattr(cfg, "reference_motion_root", None):
+        return None
+    from src.wmac.recovery_style import resolve_motion_root
+    root = resolve_motion_root(cfg.reference_motion_root, REPO)
+    env_cfg.events["init_motion_loader"].params.update(
+        motion_dir=str(root / "WalkandRun"), recovery_dir=str(root / "Recovery"))
+    env_cfg.events["reset_from_motion"].params["motion_dir"] = str(root / "WalkandRun")
+    return root
+
+
 def configure_motion_dataset(cfg, env_cfg):
     """Use one verified mirrored flat dataset for both resets and AMP experts."""
     if not cfg.mirror_walk_motions:
@@ -228,6 +248,7 @@ def main(cfg: WmacConfig) -> None:
     from src.wmac.runner import WmacRunner
     from src.recovery_rewards import configure_recovery_height_reward
     from src.wmac.reward_integration import configure_smooth_reward_env
+    from src.wmac.recovery_style import configure_recovery_style_env
 
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -254,6 +275,8 @@ def main(cfg: WmacConfig) -> None:
     env_cfg = load_env_cfg(cfg.task)
     configure_recovery_height_reward(env_cfg, cfg.recovery_height_reward)
     configure_smooth_reward_env(cfg, env_cfg)
+    configure_recovery_style_env(cfg, env_cfg)
+    reference_root = configure_reference_motion_root(cfg, env_cfg)
     motion_paths = configure_motion_dataset(cfg, env_cfg)
     if motion_paths is not None:
         import shutil
@@ -266,6 +289,8 @@ def main(cfg: WmacConfig) -> None:
         env = CaptureEnv(cfg=env_cfg, device=cfg.device)
         if motion_paths is not None:
             env._wmac_motion_root = str(motion_paths.root)
+        elif reference_root is not None:
+            env._wmac_motion_root = str(reference_root)
         env.adapter = StateAdapter(env, recovery_counter_semantics=cfg.recovery_counter_semantics)
         runner = WmacRunner(env, cfg, log_dir)
         if cfg.resume:
