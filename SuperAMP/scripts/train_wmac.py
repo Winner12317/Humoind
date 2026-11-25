@@ -77,6 +77,8 @@ def parse_config(argv: list[str] | None = None) -> WmacConfig:
         default.init_policy = None
     else:
         default = WmacConfig.for_profile(selected.profile or "balanced")
+    # The output destination belongs to this invocation, including on resume.
+    default.log_root = os.environ.get("AMP_LOG_ROOT") or None
     cfg = tyro.cli(WmacConfig, default=default, args=arguments)
     for key, value in imagined_foot_slip_protocol(cfg).items():
         setattr(cfg, key, value)
@@ -239,7 +241,7 @@ def main(cfg: WmacConfig) -> None:
 
     import numpy as np
     import torch
-    from mjlab.tasks.registry import load_env_cfg
+    from mjlab.tasks.registry import load_env_cfg, load_rl_cfg
     from mjlab.utils.torch import configure_torch_backends
     import mjlab.tasks  # noqa: F401
     import src.tasks  # noqa: F401
@@ -259,13 +261,14 @@ def main(cfg: WmacConfig) -> None:
         torch.cuda.manual_seed_all(cfg.seed)
     configure_torch_backends(allow_tf32=cfg.precision == "tf32")
 
-    log_root = Path(cfg.log_root).expanduser()
-    if not log_root.is_absolute():
-        log_root = REPO / log_root
+    ppo_root = (Path("logs/rsl_rl") / load_rl_cfg(cfg.task).experiment_name).resolve()
+    log_root = (REPO / Path(cfg.log_root).expanduser()).resolve() if cfg.log_root else ppo_root
+    cfg.log_root = str(log_root)
+    run_prefix = "wmac_" if log_root == ppo_root else ""
     suffix = f"_{cfg.run_name}" if cfg.run_name else ""
     if Path(suffix).name != suffix or "/" in suffix or "\\" in suffix:
         raise ValueError("run_name must not contain path separators.")
-    log_dir = log_root / f"{datetime.now():%Y-%m-%d_%H-%M-%S_%f}_seed{cfg.seed}_{cfg.preset}{suffix}"
+    log_dir = log_root / f"{run_prefix}{datetime.now():%Y-%m-%d_%H-%M-%S_%f}_seed{cfg.seed}_{cfg.preset}{suffix}"
     log_dir.mkdir(parents=True, exist_ok=False)
     (log_dir / "config.json").write_text(json.dumps(asdict(cfg), indent=2) + "\n")
     source_snapshot(log_dir)

@@ -154,7 +154,7 @@ class WmacConfig:
     evaluation_steps: int = 250
     evaluation_envs: int = 32
     run_name: str = ""
-    log_root: str = "logs/wmac"
+    log_root: str | None = None
     resume: str | None = None
     init_policy: str | None = None
     init_discriminator: bool = True

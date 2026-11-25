@@ -1,9 +1,11 @@
 """CPU checks for checkpoint configuration provenance and explicit overrides."""
 
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import torch
 
@@ -19,6 +21,16 @@ class ResumeConfigurationTest(unittest.TestCase):
         path = Path(directory) / "model.pt"
         torch.save({"format": "amp-wmac-v1", "config": config}, path)
         return str(path)
+
+    def test_log_root_uses_current_invocation_on_new_and_resumed_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = self.checkpoint(directory, {"log_root": "/previous/machine"})
+            for args in ([], ["--resume", checkpoint]):
+                with self.subTest(args=args), patch.dict(os.environ, AMP_LOG_ROOT=""):
+                    self.assertIsNone(CLI.parse_config(args).log_root)
+                    os.environ["AMP_LOG_ROOT"] = "/environment"
+                    self.assertEqual(CLI.parse_config(args).log_root, "/environment")
+                    self.assertEqual(CLI.parse_config([*args, "--log-root", "/cli"]).log_root, "/cli")
 
     def test_resume_rejects_a_conflicting_explicit_profile(self):
         with tempfile.TemporaryDirectory() as directory:

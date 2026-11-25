@@ -20,7 +20,7 @@ bash scripts/train_smooth_weights_v3.sh \
   --num-envs 4096 \
   --imagined-recovery-foot-slip learned_v1 \
   --discriminator-updates 2 --discriminator-batch-size 25600 \
-  --log-root "$AMP_LOG_ROOT" --run-name pm01_local_4096
+  --run-name pm01_local_4096
 ```
 
 `--task` is the only PM01-specific argument. The mirrored motion set is built on the
@@ -44,18 +44,19 @@ bash scripts/train_recovery_style_v1.sh \
   --iterations 400000 \
   --imagined-recovery-foot-slip learned_v1 \
   --discriminator-updates 2 --discriminator-batch-size 25600 \
-  --log-root "$AMP_LOG_ROOT" --run-name pm01_recovery_style
+  --run-name pm01_recovery_style
 
 # continue a checkpoint that was trained without the fixes (its saved settings are
 # restored; --num-envs etc. are not repeated)
 bash scripts/train_recovery_style_v1.sh \
   --resume "$HOME/checkpoints/model_78400.pt" --allow-recovery-style-migration \
   --reference-motion-root src/assets/motions/pm01/amp_clean \
-  --iterations 79600 --log-root "$AMP_LOG_ROOT" --run-name pm01_recovery_style_fork
+  --iterations 79600 --run-name pm01_recovery_style_fork
 ```
 
-Set `AMP_LOG_ROOT` to a writable directory on the training server before running either
-command. The resume example adds 1,200 iterations to `model_78400.pt` and restores its
+Both commands save under `logs/rsl_rl/pm01_amp_locomotion_aligned/wmac_<timestamp>_...`
+when launched from the SuperAMP directory. To use a custom root, set `AMP_LOG_ROOT`
+or pass `--log-root` on the command line. The resume example adds 1,200 iterations to `model_78400.pt` and restores its
 environment count. The 1,024-environment setup was used for the PM01 pilot on an RTX 4080.
 
 The mirrored set for the cleaned clips is built on the first run in

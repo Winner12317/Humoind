@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -37,6 +38,27 @@ class TrainConfig:
     env_cfg = load_env_cfg(task_id)
     agent_cfg = load_rl_cfg(task_id)
     return TrainConfig(env=env_cfg, agent=agent_cfg)
+
+
+def get_ppo_checkpoint_path(log_root: Path, run_pattern: str, checkpoint_pattern: str) -> Path:
+  """Resolve a PPO checkpoint in a directory that can also contain WMAC runs."""
+  if not log_root.exists():
+    return get_checkpoint_path(log_root, run_pattern, checkpoint_pattern)
+
+  ppo_runs = (
+    run
+    for run in log_root.iterdir()
+    if run.is_dir()
+    and run.name != "wandb_checkpoints"
+    and not run.name.startswith("wmac_")
+    and re.match(run_pattern, run.name)
+  )
+  latest_run = max(ppo_runs, default=None)
+  if latest_run is None:
+    raise ValueError(f"No run directories found in {log_root} matching '{run_pattern}'")
+
+  selected_run = re.escape(latest_run.name) + r"\Z"
+  return get_checkpoint_path(log_root, selected_run, checkpoint_pattern)
 
 
 def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
@@ -97,10 +119,9 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   resume_path: Path | None = None
   if cfg.agent.resume:
-      # Load checkpoint from local filesystem.
-      resume_path = get_checkpoint_path(
-        log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint
-      )
+    resume_path = get_ppo_checkpoint_path(
+      log_root_path, cfg.agent.load_run, cfg.agent.load_checkpoint
+    )
 
   # Only record videos on rank 0 to avoid multiple workers writing to the same files.
   if cfg.video and rank == 0:
