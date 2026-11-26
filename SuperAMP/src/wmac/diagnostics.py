@@ -138,11 +138,19 @@ def _preserve_state(runner) -> Iterator[None]:
 def _objective_terms(cfg, task_weight: float, style_weight: float,
                      bootstrap: bool) -> Iterator[None]:
     saved = cfg.task_weight, cfg.style_weight, cfg.critic_bootstrap
+    saved_recovery = getattr(cfg, "recovery_style_weight", None)
     cfg.task_weight, cfg.style_weight, cfg.critic_bootstrap = task_weight, style_weight, bootstrap
+    if saved_recovery is not None and style_weight != saved[1]:
+        # Components are isolated by zeroing weights; the recovery style weight goes with style.
+        if style_weight != 0.:
+            raise ValueError("Objective components rescale style only to zero")
+        cfg.recovery_style_weight = 0.
     try:
         yield
     finally:
         cfg.task_weight, cfg.style_weight, cfg.critic_bootstrap = saved
+        if saved_recovery is not None:
+            cfg.recovery_style_weight = saved_recovery
 
 
 def objective_gradient_probe(runner, batch: dict[str, torch.Tensor],
@@ -461,7 +469,11 @@ def open_loop_probe(runner, windows: dict[str, torch.Tensor],
         if real["state"].shape[0]:
             features = runner.adapter.amp_features(torch.stack((real["state"], real["next_state"])))
             style, score = runner._amp_reward(features[0], features[1])
-            reward = runner.cfg.task_weight * real["reward"] + runner.cfg.style_weight * style
+            weighted = runner.cfg.style_weight * style
+            if getattr(runner.cfg, "recovery_style_weight", None) is not None:
+                from .recovery_style import weighted_style
+                weighted = weighted_style(runner.cfg, style, real["state"], real["context"], runner._upright_height())
+            reward = runner.cfg.task_weight * real["reward"] + weighted
             current = runner.critic(runner.adapter.critic_features(real["state"],
                 real["previous_action"], real["command"], real["context"]))
             successor = runner.critic(runner.adapter.critic_features(real["next_state"],

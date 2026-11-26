@@ -45,6 +45,21 @@ def recovery_height_reward(height: torch.Tensor, desired_height: float | torch.T
     return reward * gate
 
 
+def patient_recovery_height_reward(height_reward: torch.Tensor, counter: torch.Tensor, ratio: float,
+                                   patience_reward: float | None, patience_steps: int) -> torch.Tensor:
+    """Delayed-recovery height term, with an optional patience window.
+
+    ``counter`` is the bad-pose counter after the transition (1 on the first bad
+    step). Within ``patience_steps`` the term is the constant ``patience_reward``;
+    after it, and without the option, it is ``ratio * height_reward``. The caller
+    applies the delayed-recovery mask (delay flag and counter > 0).
+    """
+    scaled = height_reward * ratio
+    if patience_reward is None:
+        return scaled
+    return torch.where(counter <= patience_steps, torch.full_like(scaled, float(patience_reward)), scaled)
+
+
 def configure_recovery_height_reward(env_cfg, semantics: str):
     """Select explicit physical height semantics before environment construction.
 

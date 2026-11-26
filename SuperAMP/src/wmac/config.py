@@ -127,6 +127,9 @@ class WmacConfig:
     wm_recovery_fraction: float | None = None
     recovery_model_error_gate: float | None = None
     recovery_max_action_shift: float | None = None
+    recovery_patience_seconds: float | None = None
+    recovery_patience_reward: float = 2.0
+    recovery_style_weight: float | None = None
     reference_motion_root: str | None = None
     allow_recovery_style_migration: bool = False
     max_model_loss_for_actor: float = 20.0
@@ -331,6 +334,9 @@ class WmacConfig:
         imagined_foot_slip_protocol(self)
         from .recovery_style import recovery_style_protocol
         recovery_style_protocol(self)
+        if self.recovery_style_weight is not None and self.amp_reward_mapping != "instantamp_centered_tanh_v1":
+            raise ValueError("recovery_style_weight is centred on the robot's average style reward and "
+                             "requires amp_reward_mapping instantamp_centered_tanh_v1")
         if self.reference_motion_root is not None and (
                 not isinstance(self.reference_motion_root, str) or not self.reference_motion_root):
             raise ValueError("reference_motion_root must be None or a nonempty path")

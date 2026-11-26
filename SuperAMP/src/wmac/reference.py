@@ -374,10 +374,15 @@ def amp_value_upper_bound(adapter, cfg) -> float:
         params = term.params
         if name == "track_root_height":
             amplitude = max(0., float(params.get("delay_env_rew_ratio", 1.))) if params.get("mask_delay", False) else 0.
+            if params.get("patience_reward") is not None and params.get("mask_delay", False):
+                amplitude = max(amplitude, float(params["patience_reward"]))
         else:
             amplitude = max(1., float(params.get("delay_env_rew_ratio", 1.))) if params.get("mask_delay", False) else 1.
         total += weight * amplitude
-    max_reward = cfg.task_weight * adapter.reward_scale * total + cfg.style_weight * cfg.amp_reward_coef
+    # recovery_style_weight adds (w_r - w) * (style - coef / 2) with style in (0, coef).
+    recovery = getattr(cfg, "recovery_style_weight", None)
+    style_weight = cfg.style_weight + (0. if recovery is None else .5 * abs(recovery - cfg.style_weight))
+    max_reward = cfg.task_weight * adapter.reward_scale * total + style_weight * cfg.amp_reward_coef
     bound = max_reward / (1. - cfg.gamma)
     if not math.isfinite(bound) or bound <= 0:
         raise ValueError("Official critic cap requires a finite positive AMP reward bound")

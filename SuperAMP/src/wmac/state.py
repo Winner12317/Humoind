@@ -18,7 +18,7 @@ import torch
 
 from src.amp_features import amp_feature_dim, build_amp_features
 from src.robot_profiles import G1, profile_for_bodies
-from src.recovery_rewards import recovery_height_reward, recovery_root_up_z
+from src.recovery_rewards import patient_recovery_height_reward, recovery_height_reward, recovery_root_up_z
 from .config import RECOVERY_COUNTER_SEMANTICS
 
 if TYPE_CHECKING:
@@ -462,7 +462,15 @@ class StateAdapter:
         height_reward = recovery_height_reward(next_state[..., 2], self.desired_height,
             float(cfg.params["std"]), upright_power=upright_power,
             up_z=recovery_root_up_z(next_state[..., 3:7]) if upright_power else None)
-        add("track_root_height", scaled_delay("track_root_height", height_reward, only=True))
+        patience = cfg.params.get("patience_reward")
+        if patience is None:
+            add("track_root_height", scaled_delay("track_root_height", height_reward, only=True))
+        else:
+            # Same expression as the simulator term (src/recovery_rewards.py); the
+            # configuration guarantees mask_delay.
+            add("track_root_height", active_delay * patient_recovery_height_reward(
+                height_reward, next_context[..., -1], float(cfg.params.get("delay_env_rew_ratio", 1.)),
+                float(patience), int(cfg.params["patience_steps"])))
         cfg = self.reward_cfg["body_ang_vel_xy_l2"]
         add("body_ang_vel_xy_l2", scaled_delay("body_ang_vel_xy_l2", torch.exp(-root_w[..., :2].square().sum(-1)/float(cfg.params["std"])**2)))
         add("is_terminated", terminated.float())

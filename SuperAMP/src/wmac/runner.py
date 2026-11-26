@@ -54,10 +54,12 @@ from .reference import (is_official, config_protocol, checkpoint_protocol, amp_v
                         imagined_foot_slip_protocol, validate_imagined_foot_slip_resume)
 from .optimizers import (build_reference_optimizer, optimizer_algorithm_name,
                          validate_reference_optimizer_state, set_learning_rate)
-from .recovery_style import (RECOVERY_STYLE_VERSION, RECOVERY_TEMPO_REWARD_TERM, RecoveryTempoCost,
-                             changes_reward, motion_root_fingerprint, recovery_start_mask,
-                             recovery_style_enabled, recovery_style_protocol, recovery_tempo_enabled,
-                             scale_recovery_gradient, validate_recovery_style_resume)
+from .recovery_style import (RECOVERY_TEMPO_REWARD_TERM, RecoveryTempoCost,
+                             changes_reward, motion_root_fingerprint, recovery_patience_enabled,
+                             recovery_start_mask, recovery_style_enabled, recovery_style_protocol,
+                             recovery_tempo_enabled, scale_recovery_gradient, weighted_style,
+                             validate_recovery_style_resume)
+from .recovery_style import implementation_version as recovery_style_version
 
 
 def lambda_returns(rewards, continuation, values, gamma=0.99, lam=0.95):
@@ -226,6 +228,13 @@ class WmacRunner:
                 if float(term.params.get('delay_env_rew_ratio', 1.)) != float(cfg.recovery_height_reward_ratio):
                     raise ValueError('Configure recovery_height_reward_ratio before creating the environment '
                                      '(configure_recovery_style_env); real and imagined objectives must match')
+        patience = (recovery_style_protocol(cfg).get('recovery_patience_reward')
+                     if recovery_patience_enabled(cfg) else None)
+        for term in (self.adapter.reward_cfg['track_root_height'],
+                     env.reward_manager.get_term_cfg('track_root_height')):
+            if term.params.get('patience_reward') != patience:
+                raise ValueError('Configure recovery_patience_seconds before creating the environment '
+                                 '(configure_recovery_style_env); real and imagined objectives must match')
         self.recovery_tempo = None
         self.recovery_style_migration_history = []
         self._recovery_gate_closed = False
@@ -715,6 +724,10 @@ class WmacRunner:
         rows = torch.multinomial(weight, count * self.cfg.discriminator_updates, replacement=True)
         self._imagined_pair_sink.append((first.detach()[rows].float(), second.detach()[rows].float()))
 
+    def _upright_height(self):
+        profile = getattr(self.adapter, 'profile', None)
+        return profile.upright_height if profile is not None else G1.upright_height
+
     def imagine(self, batch, noises=None):
         state, context = batch['state'], batch['context']
         previous, command = batch['previous_action'], batch['command']
@@ -744,7 +757,9 @@ class WmacRunner:
             task, style, score, *pairs = reward_fn(states, contexts, actions, previous_actions,
                                                    command, terminated, contacts)
         direct_style = style if self.cfg.direct_style_grad else style.detach()
-        rewards = self.cfg.task_weight * task + self.cfg.style_weight * direct_style
+        # recovery_style_weight: a centred extra weight on getting-up transitions.
+        upright = self._upright_height()
+        rewards = self.cfg.task_weight * task + weighted_style(self.cfg, direct_style, states[:-1], contexts[:-1], upright)
         continuation = 1 - terminated
         if not self.cfg.survival_grad:
             continuation = continuation.detach()
@@ -768,7 +783,8 @@ class WmacRunner:
         # Targets are cached before any optimizer step and never train other nets.
         with torch.no_grad():
             old_values = self._value(critic_x.detach())
-            targets = lambda_returns((self.cfg.task_weight*task+self.cfg.style_weight*style).detach(),
+            targets = lambda_returns((self.cfg.task_weight*task+weighted_style(
+                self.cfg, style, states[:-1], contexts[:-1], upright)).detach(),
                 continuation.detach(), old_values, self.cfg.gamma, self.cfg.gae_lambda)
             targets = self._cap_values(targets)
         return {'objective':objective, 'x':critic_x[:-1].detach(), 'targets':targets.detach(),
@@ -787,7 +803,8 @@ class WmacRunner:
             style, _ = self._amp_reward(phi[0],phi[1])
             x = self.adapter.critic_features(batch['state'],batch['previous_action'],batch['command'],batch['context'])
             nx = self.adapter.critic_features(batch['next_state'],batch['action'],batch['command'],batch['next_context'])
-            reward = self.cfg.task_weight*batch['reward']+self.cfg.style_weight*style
+            reward = self.cfg.task_weight*batch['reward']+weighted_style(
+                self.cfg, style, batch['state'], batch['context'], self._upright_height())
             target = reward+self.cfg.gamma*(~batch['terminated']).float()*self._value(nx)
         return x.detach(), target.detach()
 
@@ -1115,7 +1132,7 @@ class WmacRunner:
             actor_version = 13
         recovery_style = recovery_style_enabled(self.cfg)
         if recovery_style:
-            actor_version = RECOVERY_STYLE_VERSION
+            actor_version = recovery_style_version(self.cfg)
         payload={'format':'amp-wmac-v1','implementation_version':actor_version,'config':asdict(self.cfg),
             'training_protocol':config_protocol(self.cfg),
             'amp_reward_protocol':amp_reward_protocol(self.cfg),

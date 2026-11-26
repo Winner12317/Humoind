@@ -16,7 +16,8 @@ from mjlab.utils.lab_api.math import (
 from mjlab.utils.lab_api.string import (
   resolve_matching_names_values,
 )
-from src.recovery_rewards import recovery_height_reward, recovery_root_up_z
+from src.recovery_rewards import (patient_recovery_height_reward, recovery_height_reward,
+                                  recovery_root_up_z)
 
 if TYPE_CHECKING:
   from mjlab.envs import ManagerBasedRlEnv
@@ -159,11 +160,15 @@ def track_root_height(
   delay_env_rew_ratio: float = 1.0,
   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
   upright_power: float = 0.0,
+  patience_reward: float | None = None,
+  patience_steps: int = 0,
 ) -> torch.Tensor:
   """Root-height tracking, optionally gated by root link uprightness.
 
   The default retains legacy height-only semantics. ``upright_power=2`` gates
-  this recovery-only term by positive root up_z squared.
+  this recovery-only term by positive root up_z squared. ``patience_reward``
+  (WMAC's recovery_patience_seconds) replaces the term by that constant for the
+  first ``patience_steps`` steps of a bad-pose countdown.
   """
   asset: Entity = env.scene[asset_cfg.name]
 
@@ -172,7 +177,14 @@ def track_root_height(
   up_z = recovery_root_up_z(asset.data.body_link_quat_w[:, 0]) if upright_power else None
   reward = recovery_height_reward(cur_root_height, desired_height, std,
     up_z=up_z, upright_power=upright_power)
-  return _apply_delay_env_reward_mask_only(env, reward, mask_delay, delay_env_rew_ratio)
+  if patience_reward is None:
+    return _apply_delay_env_reward_mask_only(env, reward, mask_delay, delay_env_rew_ratio)
+  active = _get_delay_env_mask(env) if mask_delay else None
+  if active is None:
+    return torch.zeros_like(reward)
+  counter = env.termination_manager._delay_counters
+  value = patient_recovery_height_reward(reward, counter, delay_env_rew_ratio, patience_reward, patience_steps)
+  return torch.where(active, value, torch.zeros_like(value))
 
 def feet_slip(
   env: ManagerBasedRlEnv,

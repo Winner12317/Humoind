@@ -39,6 +39,30 @@ World-model error in recovery
     recovery_max_action_shift     Rejects an actor step that moves the actions on
                                   recovery starts by more than this (RMS).
 
+Get-up route: the task reward pays for standing up as early as possible
+    recovery_patience_seconds     For this long after a delayed-recovery environment
+                                  goes down (its bad-pose counter), track_root_height
+                                  pays a constant ``recovery_patience_reward`` instead
+                                  of ratio * height reward, in the simulator and in
+                                  imagination. Being down then costs little more than
+                                  standing, so the task reward no longer pays for the
+                                  fastest route up; after the window the usual height
+                                  reward and the task's deadline apply. The reward must
+                                  stay below what standing earns (the sum of the
+                                  positive tracking weights), so lying down never pays.
+    recovery_style_weight         Style weight for transitions of a delayed-recovery
+                                  environment that is below the upright height or in a
+                                  bad-pose countdown (the tempo cost's predicate). The
+                                  part above ``style_weight`` is centred: it multiplies
+                                  (style reward - its value at the robot's average
+                                  score), so a better-than-average get-up step earns
+                                  more and a worse one less, while merely staying down
+                                  earns nothing extra. (The centred-tanh style reward
+                                  is always positive; weighting all of it would pay the
+                                  robot for being on the floor.) Requires
+                                  amp_reward_mapping instantamp_centered_tanh_v1.
+                                  Imagined objective and critic targets alike.
+
 Reference data
     reference_motion_root         A motion directory (WalkandRun/, Recovery/) used for
                                   resets, tempo limits and AMP experts in place of the
@@ -69,6 +93,7 @@ RECOVERY_TEMPO_REWARD_TERM = "wmac_recovery_tempo_penalty"
 RECOVERY_REFRESH_TERM = "wmac_recovery_refresh"
 DISCRIMINATOR_PENALTY_POINTS = ("expert", "interpolated")
 RECOVERY_STYLE_VERSION = 14
+RECOVERY_PATIENCE_VERSION = 15  # first implementation with patience and recovery style weight
 MIGRATION_FLAG = "allow_recovery_style_migration"
 # Historical values. A configuration equal to these trains exactly as before.
 DEFAULTS = {
@@ -85,12 +110,19 @@ DEFAULTS = {
     "wm_recovery_fraction": None,
     "recovery_model_error_gate": None,
     "recovery_max_action_shift": None,
+    "recovery_patience_seconds": None,
+    "recovery_patience_reward": 2.0,
+    "recovery_style_weight": None,
     "reference_motion_root": None,
 }
 _TEMPO_KEYS = ("recovery_tempo_base_rise_limit", "recovery_tempo_base_rise_coef",
                "recovery_tempo_joint_speed_percentile", "recovery_tempo_joint_speed_coef")
-# Settings whose change makes stored reward labels and the critic's bound stale.
-_REWARD_KEYS = ("recovery_height_reward_ratio", "recovery_tempo_mode", *_TEMPO_KEYS)
+_PATIENCE_KEYS = ("recovery_patience_seconds", "recovery_patience_reward")
+# Settings whose change makes stored reward labels or the critic's bound stale.
+_REWARD_KEYS = ("recovery_height_reward_ratio", "recovery_tempo_mode", *_TEMPO_KEYS, *_PATIENCE_KEYS,
+                "recovery_style_weight")
+# Keys a checkpoint older than RECOVERY_PATIENCE_VERSION cannot have used.
+_VERSION_15_KEYS = (*_PATIENCE_KEYS, "recovery_style_weight")
 
 
 def _get(cfg, key):
@@ -142,7 +174,15 @@ def recovery_style_protocol(cfg) -> dict:
                                              "recovery_model_error_gate", low=0., low_open=True, optional=True),
         "recovery_max_action_shift": _number(_get(cfg, "recovery_max_action_shift"),
                                              "recovery_max_action_shift", low=0., low_open=True, optional=True),
+        "recovery_patience_seconds": _number(_get(cfg, "recovery_patience_seconds"),
+                                             "recovery_patience_seconds", low=0., low_open=True, optional=True),
+        "recovery_style_weight": _number(_get(cfg, "recovery_style_weight"), "recovery_style_weight",
+                                         low=0., optional=True),
     }
+    patience_reward = _number(_get(cfg, "recovery_patience_reward"), "recovery_patience_reward",
+                              low=0., low_open=True)
+    if result["recovery_patience_seconds"] is not None:
+        result["recovery_patience_reward"] = patience_reward
     tempo = {
         "recovery_tempo_base_rise_limit": _number(_get(cfg, "recovery_tempo_base_rise_limit"),
                                                   "recovery_tempo_base_rise_limit", low=0.),
@@ -171,6 +211,19 @@ def recovery_tempo_enabled(cfg) -> bool:
     return _get(cfg, "recovery_tempo_mode") != "none"
 
 
+def recovery_patience_enabled(cfg) -> bool:
+    return _get(cfg, "recovery_patience_seconds") is not None
+
+
+def implementation_version(cfg) -> int | None:
+    """Checkpoint implementation version these options need (None: none used)."""
+    protocol = recovery_style_protocol(cfg)
+    if any(protocol.get(key, DEFAULTS[key]) != DEFAULTS[key] for key in _VERSION_15_KEYS
+           if key != "recovery_patience_reward"):
+        return RECOVERY_PATIENCE_VERSION
+    return RECOVERY_STYLE_VERSION if recovery_style_enabled(cfg) else None
+
+
 def checkpoint_recovery_style_protocol(payload) -> dict:
     """Checkpoints written before these options existed used the historical objective."""
     saved = payload.get("config", {})
@@ -182,8 +235,17 @@ def checkpoint_recovery_style_protocol(payload) -> dict:
                                        or recorded is None):
         raise ValueError(f"Recovery-style options require implementation_version >= {RECOVERY_STYLE_VERSION} "
                          "and explicit checkpoint protocol metadata")
+    if recorded is not None:
+        # Records written before RECOVERY_PATIENCE_VERSION have no entry for options added
+        # since; those options were off.
+        recorded = {**{key: DEFAULT_PROTOCOL[key] for key in _VERSION_15_KEYS if key in DEFAULT_PROTOCOL},
+                    **recorded}
     if recorded is not None and recorded != result:
         raise ValueError("Checkpoint recovery-style protocol conflicts with its saved config")
+    if implementation_version(saved) == RECOVERY_PATIENCE_VERSION and \
+            payload.get("implementation_version", 1) < RECOVERY_PATIENCE_VERSION:
+        raise ValueError(f"Recovery patience or recovery style weight require implementation_version >= "
+                         f"{RECOVERY_PATIENCE_VERSION}")
     return result
 
 
@@ -210,6 +272,29 @@ def changes_reward(changes: Mapping) -> bool:
 def recovery_start_mask(state: torch.Tensor, context: torch.Tensor, recovery_height: float) -> torch.Tensor:
     """Starts that replay, statistics and evaluation count as recovery."""
     return (state[..., 2] < recovery_height) | (context[..., -1] > 0)
+
+
+def recovery_style_mask(state: torch.Tensor, context: torch.Tensor, upright_height: float) -> torch.Tensor:
+    """Transitions that ``recovery_style_weight`` and the tempo cost apply to (by their start)."""
+    return (context[..., -2] > .5) & ((state[..., 2] < upright_height) | (context[..., -1] > 0))
+
+
+def weighted_style(cfg, style: torch.Tensor, state: torch.Tensor, context: torch.Tensor,
+                   upright_height: float) -> torch.Tensor:
+    """Style part of the objective: ``style_weight * style``, plus on getting-up
+    transitions ``(recovery_style_weight - style_weight) * (style - centre)``.
+
+    ``centre`` is the centred-tanh reward at the robot's average score
+    (amp_reward_coef / 2). Without the option this is exactly the historical
+    ``style_weight * style``.
+    """
+    weight = cfg.style_weight
+    recovery = getattr(cfg, "recovery_style_weight", None)
+    if recovery is None:
+        return weight * style
+    mask = recovery_style_mask(state, context, upright_height)
+    extra = (float(recovery) - float(weight)) * (style - .5 * float(cfg.amp_reward_coef))
+    return weight * style + torch.where(mask, extra, torch.zeros_like(extra))
 
 
 def scale_recovery_gradient(features: torch.Tensor, recovery: torch.Tensor, scale: float,
@@ -270,7 +355,7 @@ class RecoveryTempoCost(nn.Module):
                    upright_height=profile.upright_height, source=source)
 
     def active(self, state, context):
-        return (context[..., -2] > .5) & ((state[..., 2] < self.upright_height) | (context[..., -1] > 0))
+        return recovery_style_mask(state, context, self.upright_height)
 
     def terms(self, state, next_state, context) -> dict[str, torch.Tensor]:
         active = self.active(state, context).to(next_state.dtype)
@@ -373,6 +458,25 @@ def configure_recovery_style_env(cfg, env_cfg) -> None:
         if not term.params.get("mask_delay", False):
             raise ValueError("recovery_height_reward_ratio needs the delayed-recovery height reward")
         term.params = {**term.params, "delay_env_rew_ratio": ratio}
+    seconds = protocol["recovery_patience_seconds"]
+    if seconds is not None:
+        term = env_cfg.rewards["track_root_height"]
+        if not term.params.get("mask_delay", False):
+            raise ValueError("recovery_patience_seconds needs the delayed-recovery height reward")
+        loader = env_cfg.events["init_motion_loader"].params
+        deadline = int(loader.get("max_delay_steps", 0))
+        if deadline <= 0 or float(loader.get("delay_reset_env_ratio", 0.)) <= 0:
+            raise ValueError("recovery_patience_seconds needs delayed-recovery environments")
+        steps = patience_steps(seconds, env_cfg.decimation * env_cfg.sim.mujoco.timestep)
+        if steps >= deadline:
+            raise ValueError(f"recovery_patience_seconds ({steps} steps) must end before the recovery deadline "
+                             f"({deadline} steps)")
+        ceiling = standing_reward_ceiling(env_cfg.rewards)
+        if not protocol["recovery_patience_reward"] < ceiling:
+            raise ValueError(f"recovery_patience_reward must be below what standing earns ({ceiling:g}); "
+                             "otherwise lying down pays as well as standing")
+        term.params = {**term.params, "patience_reward": protocol["recovery_patience_reward"],
+                       "patience_steps": steps}
     if protocol["recovery_tempo_mode"] != "none":
         from mjlab.managers.reward_manager import RewardTermCfg
         if not env_cfg.scale_rewards_by_dt:
@@ -380,6 +484,19 @@ def configure_recovery_style_env(cfg, env_cfg) -> None:
         if RECOVERY_TEMPO_REWARD_TERM in env_cfg.rewards:
             raise ValueError("Recovery tempo reward term was configured twice")
         env_cfg.rewards[RECOVERY_TEMPO_REWARD_TERM] = RewardTermCfg(func=physical_recovery_tempo_cost, weight=-1.)
+
+
+def patience_steps(seconds: float, step_dt: float) -> int:
+    steps = round(seconds / step_dt)
+    if steps < 1:
+        raise ValueError("recovery_patience_seconds is shorter than one control step")
+    return steps
+
+
+def standing_reward_ceiling(rewards: Mapping) -> float:
+    """Most an upright environment can earn per step: the positive (bounded) tracking terms."""
+    return sum(float(term.weight) for name, term in rewards.items()
+               if term is not None and float(term.weight) > 0 and name not in ("track_root_height", "is_terminated"))
 
 
 def resolve_motion_root(root: str, repository: Path) -> Path:

@@ -99,6 +99,74 @@ style does not yet. Of the options, the reset refresh keeps the get-up reliable 
 others set its tempo: refresh alone gave 128 / 128 at 1.64 m/s, the others without it
 93 / 128 at 0.84 m/s.
 
+### Get-up route: recovery style weight and recovery patience
+
+The PM01 v2 checkpoint (`v1` launcher, 82,400 iterations) gets up at the reference
+tempo but by a different route: from its back it sits up, plants both feet and pushes
+up through a squat, where the reference clip rolls onto its side, kneels and steps
+up. Scored with that checkpoint's own reward and discriminator, the reference's
+get-up earns less than the policy's (the task reward pays every step spent upright,
+and the pelvis is below the 0.52 m "down" line throughout the reference's kneel).
+Two opt-in settings change that trade (`src/wmac/recovery_style.py`):
+
+- `--recovery-style-weight W`: style weight `W` instead of `style_weight` on
+  getting-up transitions, applied to the style reward minus its value at the
+  robot's average score, so a better-looking get-up step earns more without the
+  robot being paid for staying on the floor. Needs the centred-tanh AMP reward.
+- `--recovery-patience-seconds T --recovery-patience-reward R`: for the first `T`
+  seconds of a recovery the height reward is the constant `R` (below the 2.5 a
+  standing robot can earn), so the task reward no longer pays for the fastest way up.
+
+`scripts/train_recovery_style_v2.sh` is the `v1` launcher plus
+`--recovery-style-weight 1.0`. From the SuperAMP directory, start a new PM01 run on a 48 GB GPU with
+
+```bash
+bash scripts/train_recovery_style_v2.sh \
+  --task EngineAI-PM01-AMP-Flat-Aligned \
+  --reference-motion-root src/assets/motions/pm01/amp_clean \
+  --num-envs 4096 --iterations 400000 \
+  --imagined-recovery-foot-slip learned_v1 \
+  --discriminator-updates 2 --discriminator-batch-size 25600 \
+  --run-name pm01_recovery_style1_scratch
+```
+
+The launcher keeps the standard walking style weight and enables the recovery-specific
+weight. The patience window is disabled by default.
+
+To continue the 82,400-iteration checkpoint for another 2,000 iterations, run
+
+```bash
+bash scripts/train_recovery_style_v2.sh \
+  --resume "$HOME/checkpoints/v2_82400.pt" --allow-recovery-style-migration \
+  --iterations 84400 --run-name pm01_recovery_style_v2_fork
+```
+
+Pilots: `v2_82400.pt` continued for 2,000 iterations (1,024 environments, one seed).
+"Lying on the back" is every clip frame where the reference lies on its back (39
+starts, training physics); "feet push while down" is a start with more than 0.2 s of
+feet on the floor while back, shoulders or pelvis are too; "on the knees" counts
+knees down with the pelvis up.
+
+| | Reference | v2 | Unchanged | Patience 2.0 + style 0.5 (uncentred draft) | Patience 1.5 + style 0.75 | Style 1.0 |
+|---|---|---|---|---|---|---|
+| From the back: time to stand | 2.24 s | 1.41 s | 1.31 s | 2.92 s | 2.28 s | 1.94 s |
+| From the back: time on the knees | 1.21 s | 0.54 s | 0.48 s | 1.75 s | 1.19 s | 0.96 s |
+| From the back: feet push while down | 0 % | 51 % | 38 % | 67 % | 59 % | 41 % |
+| Training simulator, 128 starts: success / time | — | 128 / 2.0 s | 128 / 2.05 s | 125 / 3.7 s | 128 / 2.6 s | 128 / 2.2 s |
+| SDK physics, 8 lying poses: success / time | — | 8 / 2.2 s | 7 / 2.0 s | 8 / 4.1 s | 8 / 2.8 s | 8 / 2.2 s |
+| Walking error at 0.5 m/s, training simulator | — | 0.31 | 0.41 | 0.31 | 0.35 | 0.35 |
+
+- The first draft weighted the whole style reward, which is always positive, so being
+  on the floor paid; that pilot waited out the patience window. The code now centres
+  the extra weight, and the draft's column is kept only as a warning.
+- Style 1.0 alone keeps every get-up and adds kneeling; from some falls it now curls
+  onto its knees and stands from there, close to the reference. From others it still
+  sits up and rises from a squat, and no setting removed the feet-first push in
+  2,000 iterations. Patience made get-ups slower and, at 1.5 / 3.5 s, sometimes
+  wandering on the floor.
+- Cost: none measurable (0.802 s per iteration with and without the settings,
+  every phase within 2 ms).
+
 | Task | Use | Actor input / actions | AMP features |
 |---|---|---|---|
 | `EngineAI-PM01-AMP-Flat` | PPO, flat | 312 (4 × 78) / 23 | 195, legacy |

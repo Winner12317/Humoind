@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 from dataclasses import asdict
 import importlib.util
+import math
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -25,7 +26,11 @@ from src.wmac.recovery_style import (
     recovery_style_protocol, reference_joint_speed_limits, scale_recovery_gradient,
     validate_recovery_style_resume,
 )
-from src.wmac.reference import amp_reward_protocol, config_protocol, smooth_reward_protocol
+from src.wmac.recovery_style import RECOVERY_PATIENCE_VERSION, standing_reward_ceiling, weighted_style
+from src.wmac.recovery_style import implementation_version as recovery_style_implementation_version
+from src.recovery_rewards import patient_recovery_height_reward, recovery_height_reward, recovery_root_up_z
+from src.wmac.diagnostics import objective_gradient_probe
+from src.wmac.reference import amp_reward_protocol, amp_value_upper_bound, config_protocol, smooth_reward_protocol
 from test_centered_amp_integration import centered
 from test_wmac_optimization import FixedReplay, make_runner
 from test_wmac_schedule_restore import checkpoint_runner
@@ -500,6 +505,12 @@ class RecoveryCheckpointTest(unittest.TestCase):
             again.load(forked)
             self.assertEqual(len(again.recovery_style_migration_history), 1)
 
+    def test_new_options_save_as_version_15(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, saved = self.save(directory, recovery_style_weight=.5)
+        self.assertEqual(saved["implementation_version"], RECOVERY_PATIENCE_VERSION)
+        self.assertEqual(saved["recovery_style_protocol"]["recovery_style_weight"], .5)
+
     def test_reward_change_refuses_a_replay_that_holds_old_reward_labels(self):
         with tempfile.TemporaryDirectory() as directory, patch("torch.cuda.is_available", return_value=False):
             path, _ = self.save(directory)
@@ -508,6 +519,205 @@ class RecoveryCheckpointTest(unittest.TestCase):
             fork.replay.size = 5
             with self.assertRaisesRegex(ValueError, "empty target replay"):
                 fork.load(path)
+
+
+class RecoveryPatienceTest(unittest.TestCase):
+    """recovery_patience_seconds: a constant reward for the first seconds of a recovery."""
+
+    def env_cfg(self, delay_ratio=.4, max_delay=250):
+        def term(weight, **params):
+            return SimpleNamespace(weight=weight, params=params)
+        return SimpleNamespace(
+            rewards={"track_anchor_linear_velocity": term(1., std=1., mask_delay=True, delay_env_rew_ratio=0.),
+                     "track_anchor_angular_velocity": term(1., std=3.14, mask_delay=True, delay_env_rew_ratio=0.),
+                     "track_root_height": term(1., std=.3, mask_delay=True, delay_env_rew_ratio=3.5),
+                     "body_ang_vel_xy_l2": term(.5, std=3.14, mask_delay=True, delay_env_rew_ratio=0.),
+                     "is_terminated": term(-200.), "action_rate_l2": term(-.01)},
+            terminations={}, scale_rewards_by_dt=True, decimation=4,
+            sim=SimpleNamespace(mujoco=SimpleNamespace(timestep=.005)),
+            events={"init_motion_loader": SimpleNamespace(params={"delay_reset_env_ratio": delay_ratio,
+                                                                  "max_delay_steps": max_delay})})
+
+    def test_protocol_records_the_reward_only_when_the_window_is_on(self):
+        self.assertIsNone(DEFAULT_PROTOCOL["recovery_patience_seconds"])
+        self.assertIsNone(DEFAULT_PROTOCOL["recovery_style_weight"])
+        self.assertNotIn("recovery_patience_reward", DEFAULT_PROTOCOL)
+        # The unused reward value is not part of the objective.
+        self.assertEqual(recovery_style_protocol(fixed(recovery_patience_reward=1.0)), DEFAULT_PROTOCOL)
+        protocol = recovery_style_protocol(fixed(recovery_patience_seconds=3.5))
+        self.assertEqual((protocol["recovery_patience_seconds"], protocol["recovery_patience_reward"]), (3.5, 2.0))
+        for changes in ({"recovery_patience_seconds": 0.}, {"recovery_patience_seconds": -1.},
+                        {"recovery_patience_seconds": 3.5, "recovery_patience_reward": 0.},
+                        {"recovery_style_weight": -.1}, {"recovery_style_weight": float("inf")}):
+            with self.assertRaises(ValueError, msg=changes):
+                fixed(amp_reward_mapping="instantamp_centered_tanh_v1", **changes).validate()
+
+    def test_new_options_need_implementation_version_15(self):
+        self.assertIsNone(recovery_style_implementation_version(fixed()))
+        self.assertEqual(recovery_style_implementation_version(fixed(recovery_value_grad_scale=.1)),
+                         RECOVERY_STYLE_VERSION)
+        for changes in ({"recovery_patience_seconds": 3.5}, {"recovery_style_weight": .5}):
+            cfg = fixed(amp_reward_mapping="instantamp_centered_tanh_v1", **changes)
+            self.assertEqual(recovery_style_implementation_version(cfg), RECOVERY_PATIENCE_VERSION)
+            self.assertEqual(checkpoint_recovery_style_protocol(payload(cfg, version=RECOVERY_PATIENCE_VERSION)),
+                             recovery_style_protocol(cfg))
+            with self.assertRaisesRegex(ValueError, "implementation_version"):
+                checkpoint_recovery_style_protocol(payload(cfg, version=RECOVERY_STYLE_VERSION))
+            target = copy.deepcopy(cfg)
+            target.allow_recovery_style_migration = True
+            self.assertTrue(changes_reward(validate_recovery_style_resume(payload(), target)))
+
+    def test_version_14_checkpoint_recorded_before_the_options_still_resumes(self):
+        cfg = fixed(recovery_value_grad_scale=.1, recovery_tempo_mode="reference_limits_v1")
+        source = payload(cfg, version=RECOVERY_STYLE_VERSION)
+        for key in ("recovery_patience_seconds", "recovery_patience_reward", "recovery_style_weight"):
+            source["config"].pop(key, None)
+            source["recovery_style_protocol"].pop(key, None)
+        self.assertEqual(checkpoint_recovery_style_protocol(source), recovery_style_protocol(cfg))
+        restored = resolve_checkpoint_config(source)
+        self.assertEqual(validate_recovery_style_resume(source, restored), {})
+        target = copy.deepcopy(restored)
+        target.recovery_patience_seconds, target.allow_recovery_style_migration = 3.5, True
+        self.assertEqual(set(validate_recovery_style_resume(source, target)),
+                         {"recovery_patience_seconds", "recovery_patience_reward"})
+
+    def test_shared_formula(self):
+        height = torch.tensor([.2, .2, .2, .2])
+        counter = torch.tensor([1, 5, 6, 40])
+        torch.testing.assert_close(patient_recovery_height_reward(height, counter, 2., None, 5), height * 2.)
+        torch.testing.assert_close(patient_recovery_height_reward(height, counter, 2., 1.5, 5),
+                                   torch.tensor([1.5, 1.5, .4, .4]))
+
+    def test_environment_configuration(self):
+        env_cfg = self.env_cfg()
+        shared = env_cfg.rewards["track_root_height"].params
+        configure_recovery_style_env(fixed(recovery_patience_seconds=3.5), env_cfg)
+        params = env_cfg.rewards["track_root_height"].params
+        self.assertEqual((params["patience_reward"], params["patience_steps"]), (2.0, 175))
+        self.assertNotIn("patience_reward", shared)  # another task's mapping is not edited
+        self.assertEqual(standing_reward_ceiling(env_cfg.rewards), 2.5)
+        for cfg, env_cfg, message in (
+                (fixed(recovery_patience_seconds=5.0), self.env_cfg(), "deadline"),
+                (fixed(recovery_patience_seconds=3.5, recovery_patience_reward=2.5), self.env_cfg(), "standing"),
+                (fixed(recovery_patience_seconds=3.5), self.env_cfg(delay_ratio=0.), "delayed-recovery"),
+                (fixed(recovery_patience_seconds=.001), self.env_cfg(), "one control step")):
+            with self.assertRaisesRegex(ValueError, message):
+                configure_recovery_style_env(cfg, env_cfg)
+
+    def test_simulator_term(self):
+        from src.tasks.amp_loco.mdp.rewards import track_root_height
+        heights = torch.tensor([.8, .3, .3, .3, .3])
+        robot = SimpleNamespace(data=SimpleNamespace(
+            default_root_state=torch.tensor([[0., 0., .8] + [1., 0., 0., 0.] + [0.] * 6] * 5),
+            body_link_pos_w=torch.stack((torch.zeros(5), torch.zeros(5), heights), -1)[:, None],
+            body_link_quat_w=torch.tensor([[1., 0., 0., 0.]] * 5)[:, None]))
+        manager = SimpleNamespace(_delay_env_mask=torch.tensor([True, True, True, True, False]),
+                                  _delay_counters=torch.tensor([0, 1, 5, 6, 3]))
+        env = SimpleNamespace(scene={"robot": robot}, termination_manager=manager)
+        height = math.exp(-(.5 / .3) ** 2)
+        plain = track_root_height(env, std=.3, mask_delay=True, delay_env_rew_ratio=2., upright_power=2.)
+        torch.testing.assert_close(plain, torch.tensor([0., 2 * height, 2 * height, 2 * height, 0.]))
+        patient = track_root_height(env, std=.3, mask_delay=True, delay_env_rew_ratio=2., upright_power=2.,
+                                    patience_reward=1.5, patience_steps=5)
+        torch.testing.assert_close(patient, torch.tensor([0., 1.5, 1.5, 2 * height, 0.]))
+
+    def test_imagined_term_is_the_same_expression(self):
+        runner, values, _ = make_runner(batch_size=4)
+        adapter = runner.adapter
+        state = values["state"].clone(); state[:, 2] = .3
+        following = state.clone()
+        context = values["context"].clone(); context[:, -2] = torch.tensor([1., 1., 1., 0.])
+        following_context = context.clone(); following_context[:, -1] = torch.tensor([3., 200., 0., 3.])
+        args = (state, following, torch.zeros(4, 29, dtype=state.dtype), torch.zeros(4, 29, dtype=state.dtype),
+                values["command"], following_context, torch.zeros(4, dtype=state.dtype),
+                torch.zeros(4, 2, dtype=state.dtype))
+        term = adapter.reward_cfg["track_root_height"]
+        original = term.params
+        with torch.no_grad():
+            before = adapter.task_reward(*args)
+            term.params = {**original, "patience_reward": 1.5, "patience_steps": 175}
+            try:
+                after = adapter.task_reward(*args)
+            finally:
+                term.params = original
+        height = recovery_height_reward(following[:, 2], adapter.desired_height, .3,
+                                        up_z=recovery_root_up_z(following[:, 3:7]), upright_power=2.)
+        expected = adapter.reward_scale * torch.stack((1.5 - 3.5 * height[0], torch.zeros_like(height[0]),
+                                                       torch.zeros_like(height[0]), torch.zeros_like(height[0])))
+        torch.testing.assert_close(after - before, expected)
+
+    def test_critic_bound_covers_both_options(self):
+        runner, _, _ = make_runner()
+        base = amp_value_upper_bound(runner.adapter, runner.cfg)
+        runner.cfg.recovery_style_weight = runner.cfg.style_weight + .5
+        raised = amp_value_upper_bound(runner.adapter, runner.cfg)
+        self.assertAlmostEqual((raised - base) * (1 - runner.cfg.gamma), .25 * runner.cfg.amp_reward_coef)
+        runner.cfg.recovery_style_weight = None
+        term = runner.adapter.reward_cfg["track_root_height"]
+        original = term.params
+        try:
+            term.params = {**original, "patience_reward": 1.5, "patience_steps": 175}  # below the 3.5 ratio
+            self.assertEqual(amp_value_upper_bound(runner.adapter, runner.cfg), base)
+            term.params = {**original, "delay_env_rew_ratio": 1.}
+            low_ratio = amp_value_upper_bound(runner.adapter, runner.cfg)
+            term.params = {**original, "delay_env_rew_ratio": 1., "patience_reward": 2., "patience_steps": 175}
+            self.assertAlmostEqual(amp_value_upper_bound(runner.adapter, runner.cfg) - low_ratio,
+                                   runner.cfg.task_weight * runner.adapter.reward_scale * 1. / (1 - runner.cfg.gamma))
+        finally:
+            term.params = original
+
+
+class RecoveryStyleWeightTest(unittest.TestCase):
+    def recovering(self, runner, values):
+        values["context"][:, -2] = 1.
+        values["state"][:, 2] = .3
+        values["actor_history"] = runner.adapter.actor_frame(values["state"], values["previous_action"],
+            values["command"], values["context"]).unsqueeze(1).repeat(1, 4, 1).flatten(1)
+
+    def test_extra_weight_is_centred_on_the_robot_average(self):
+        cfg = fixed(amp_reward_mapping="instantamp_centered_tanh_v1")
+        state = torch.zeros(4, 71); state[:, 2] = torch.tensor([.3, .3, .9, .3])
+        context = torch.zeros(4, 35); context[:, -2] = torch.tensor([1., 1., 1., 0.])
+        style = torch.tensor([.08, .05, .08, .02])  # the centre is amp_reward_coef / 2 = .05
+        torch.testing.assert_close(weighted_style(cfg, style, state, context, .65), cfg.style_weight * style)
+        cfg.recovery_style_weight = .75
+        expected = cfg.style_weight * style + torch.tensor([.5 * .03, 0., 0., 0.])
+        torch.testing.assert_close(weighted_style(cfg, style, state, context, .65), expected)
+        cfg.amp_reward_mapping = "clipped_lsgan_v1"
+        with self.assertRaisesRegex(ValueError, "centred"):
+            cfg.validate()
+
+    def test_recovering_rollouts_use_the_recovery_weight_and_walking_ones_do_not(self):
+        runner, values, noise = make_runner()
+        values["context"][:, -2:] = 0.  # no delayed-recovery environment
+        with torch.no_grad():
+            walking = runner.imagine(values, noises=noise)
+            runner.cfg.recovery_style_weight = .9
+            unchanged = runner.imagine(values, noises=noise)
+        torch.testing.assert_close(unchanged["objective"], walking["objective"], rtol=0, atol=0)
+        torch.testing.assert_close(unchanged["targets"], walking["targets"], rtol=0, atol=0)
+        runner, values, noise = make_runner()
+        self.recovering(runner, values)
+        base = runner.cfg.style_weight
+        with torch.no_grad():
+            runner.cfg.recovery_style_weight = .9
+            weighted = runner.imagine(values, noises=noise)
+            runner.cfg.recovery_style_weight, runner.cfg.style_weight = None, .9
+            reference = runner.imagine(values, noises=noise)
+        self.assertEqual(float(weighted["survival"].min()), 1.)  # every imagined step stays a recovery step
+        # The same weight on style, less the centre on every recovering step.
+        offset = (.9 - base) * .5 * runner.cfg.amp_reward_coef * sum(
+            runner.cfg.gamma ** k for k in range(runner.cfg.imagination_horizon))
+        torch.testing.assert_close(weighted["objective"], reference["objective"] - offset)
+
+    def test_gradient_probe_components_still_add_up(self):
+        runner, values, noise = make_runner(batch_size=2, horizon=2)
+        self.recovering(runner, values)
+        runner.cfg.recovery_style_weight = .9
+        result = objective_gradient_probe(runner, values, noise)
+        self.assertLess(result["decomposition"]["objective_absolute_residual"], 1e-12)
+        self.assertLess(result["decomposition"]["gradient_relative_residual"], 1e-9)
+        self.assertEqual(runner.cfg.recovery_style_weight, .9)
 
 
 class CleanRecoveryReferenceTest(unittest.TestCase):
