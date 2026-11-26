@@ -1,0 +1,34 @@
+{
+  "format": "legacy-g1-locked-standing-source-v1",
+  "file": "stand_still_locked_001.csv",
+  "sha256": "a9f812567fb714ac0296d2611b3a5745d727ca5971225e833a0ddeac453aa3d6",
+  "source_repository": "FCSModel user workspace",
+  "source_commit": "fe8db31ef14dc1941459c87bdeeb081de0eb68af",
+  "source_path": "src/assets/motions/raw_csv/g1/stand_still_locked_001.csv",
+  "earliest_traceable_commit": "3497b7ba",
+  "local_source_path": "/home/autel/g1_amp/src/assets/motions/raw_csv/g1/stand_still_locked_001.csv",
+  "migration_manifest": "/home/autel/g1_amp/migration_manifest.json",
+  "git_object_hash_verified": true,
+  "row_count": 1201,
+  "column_count": 36,
+  "all_rows_identical": true,
+  "layout": "pelvis xyz, pelvis quaternion xyzw, 29 joints in scripts/csv_to_npz.py joint_names order",
+  "source_fps": null,
+  "source_recorded_duration_seconds": null,
+  "source_fps_note": "The CSV has no timestamps or frame-rate metadata. The old converter has a 120 Hz batch example, which is not provenance for this particular locked-pose file.",
+  "output_representation_fps": 50.0,
+  "output_representation_frames": 1201,
+  "output_representation_transition_seconds": 24.0,
+  "representation_note": "Re-express the existing identical static poses at the current 50 Hz control rate. 24 seconds describes this training representation, not a measured original recording duration.",
+  "data_kind": "Existing locked G1 standing pose; not a claimed human motion recording",
+  "license": "No separate dataset license was found in the source workspace. This is user-provided project data; no third-party license is assigned or expanded.",
+  "scope": "Reuse the exact G1 source CSV. R1 COM-optimized stand clips and moving Neutral_SW are not imported.",
+  "joint_order_source": {
+    "source_commit": "fe8db31ef14dc1941459c87bdeeb081de0eb68af",
+    "source_path": "scripts/csv_to_npz.py",
+    "joint_names_lines": [
+      480,
+      510
+    ]
+  }
+}

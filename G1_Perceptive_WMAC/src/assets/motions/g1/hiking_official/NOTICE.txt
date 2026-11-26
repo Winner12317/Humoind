@@ -1,0 +1,29 @@
+Official Hiking walking-reference data bundle
+
+Project: Hiking in the Wild
+https://project-instinct.github.io/hiking-in-the-wild/
+Paper: https://arxiv.org/abs/2601.07718
+Author-provided public Data & Model package:
+https://drive.google.com/file/d/10tQylYHdKLVDVnmVHrygLB70neHnPdoF/view
+
+This directory contains three unmodified files extracted from the author's
+public package: parkour_motion_without_run_retargetted.npz,
+parkour_motion_without_run.yaml and README.md. The NPZ is the complete
+walking-only reference (18,982 raw frames at 50 Hz); the original README also
+describes deployment examples that are not part of this data-only bundle.
+SOURCE_MANIFEST.json records the source archive SHA256, original ZIP member
+paths, byte sizes and individual SHA256 digests. Each bundled data file is
+byte-for-byte identical to its recorded member of the pinned package.
+
+The original archive also contains author policy checkpoints. Those weights
+are not included or required to train the local model from scratch. Converted
+MuJoCo motion files and mirrored derivatives are generated locally in the
+ignored .perceptive_cache directory; these three originals are not modified.
+
+The public Data & Model package contains no separate data-license text.
+Copyright and other rights remain with the upstream rights holders. This
+notice preserves the source and the original author-provided README; it does
+not grant additional rights or infer a data license from the InstinctLab code
+license. See the source project and its authors for data-use terms. The
+separate InstinctLab code attribution and license are recorded in the root
+THIRD_PARTY_NOTICES.md and licenses/instinctlab-CC-BY-NC-4.0.txt.

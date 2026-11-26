@@ -1,0 +1,136 @@
+{
+  "snapshot_date": "2026-11-20",
+  "public_base": "https://github.com/ccrpRepo/AMP_mjlab.git",
+  "public_commit": "6c7a2947fccc973e4af8e6d90e550400f1b6fcfc",
+  "source_reference_head": "6427e3eed1ea48d0167c594d964550e05fae38a1",
+  "public_git_fetch_and_restored_source_hashes": {
+    "success": true,
+    "files": 417
+  },
+  "dependency_locks": {
+    "non_torch_pip_distributions": 136,
+    "unchanged_from_20261117": true,
+    "conda_explicit_packages": 26,
+    "all_conda_urls_http200": true
+  },
+  "dependency_public_pypi_dryrun": {
+    "success": true,
+    "resolved_distributions": 138,
+    "index": "https://pypi.org/simple",
+    "flags": [
+      "--dry-run",
+      "--ignore-installed",
+      "--only-binary=:all:"
+    ]
+  },
+  "dependency_official_torch_wheel_dryrun": {
+    "success": true,
+    "resolved_wheels": 2,
+    "index": "https://download.pytorch.org/whl/cu126",
+    "flags": [
+      "--dry-run",
+      "--ignore-installed",
+      "--only-binary=:all:",
+      "--no-deps"
+    ]
+  },
+  "dependency_source_comparison": {
+    "mjlab": {
+      "version": "1.2.0",
+      "python_files": 183,
+      "different": [
+        "mjlab/managers/observation_manager.py"
+      ],
+      "missing": [],
+      "wheel_sha256": "2b2fdbce0ddb8920ed550777f3ed8c266ee1bd2daeef9b936ba8e0423e5e2e13"
+    },
+    "mujoco-warp": {
+      "version": "3.8.1",
+      "python_files": 69,
+      "different": [],
+      "missing": [],
+      "wheel_sha256": "6aef7339ba3a8bf8e69659172d2d770169096e3a341f6b5b8a909b383c2581a2"
+    }
+  },
+  "actual_hfield_installation": {
+    "status": "needs_patch",
+    "mujoco_warp": "3.8.1",
+    "collision_sha256": "1932c52be6867bed6ae3265ae683102f54099ae278ea93c3dcd25ff1f5e9c8bf",
+    "core_sha256": "3c12b154998af28e257ff80437ca4250546947a6b3bf2af7fa3f1210fdff7d74",
+    "installer_default": "--check",
+    "explicit_optional_argument": "--apply-hfield-fix"
+  },
+  "reconstructed_cpu_contract_tests": {
+    "run": 85,
+    "passed": 83,
+    "skipped": 2,
+    "success": true,
+    "modules": [
+      "test_hiking_bundled_source",
+      "test_hiking_amp",
+      "test_hiking_observations",
+      "test_hiking_standing_expert",
+      "test_hiking_full_world_model",
+      "test_hiking_depth_randomization",
+      "test_perceptive_reference_schedule",
+      "test_mujoco_warp_hfield_fix",
+      "test_hiking_reference_robot",
+      "test_perceptive_attention_policy",
+      "test_hiking_depth_capture_execution",
+      "test_hiking_vector_clock",
+      "test_replay_sampling_execution",
+      "test_wm_macro_direct_staging",
+      "test_imagination_execution_reuse",
+      "test_perceptive_profiler"
+    ]
+  },
+  "actual_default_expert_offline_verification": {
+    "success": true,
+    "network_forbidden": true,
+    "robot_asset_sha256": {
+      "src/assets/robots/unitree_g1/g1_29dof_torsobase_popsicle.urdf": "5e99d930af64f3f0bfd34235239e288cc380ba62c8b01fcfcf8cc9f0996e7fa4",
+      "src/assets/robots/unitree_g1/hiking_head_link.STL": "d297328b3569fc85074355e76cba6c889d19de5361224bcd3c5b8ce82e13b9b6"
+    },
+    "hiking_training_version": 3,
+    "sensor_protocol": "g1_hiking_calibrated_v1",
+    "official_reference_frames": 18981,
+    "standing_expert_source": "none",
+    "walking_expert_source": "pre_hiking_local_walk_turn_v2",
+    "local_source_clips": 13,
+    "local_source_frames": 389,
+    "local_training_clips": 26,
+    "local_training_frames": 778,
+    "training_clips": 28,
+    "official_history_windows": 37944,
+    "local_history_windows": 544,
+    "total_history_windows": 38488,
+    "legacy_walking_window_fraction": 0.014134275618374558,
+    "sampled_histories": [
+      256,
+      10,
+      67
+    ],
+    "local_cache_rebuilt_from_public_base": true,
+    "source_hashes_verified": true
+  },
+  "installer_outputs": [
+    "reproduce/reference-config.json",
+    "reproduce/offline-input-audit.json",
+    "reproduce/motion-audit.json",
+    "reproduce/activate.sh"
+  ],
+  "limits": [
+    "Full fresh pip installation has not been run; public binary dependency resolution and source restoration were tested.",
+    "No claim that full4096-env/H32 training or long-horizon walking quality was validated on another GPU.",
+    "The restorer is delivered outside its own compressed payload and copies itself into scripts after verification."
+  ],
+  "fresh_conda_environment": {
+    "success": true,
+    "date": "2026-11-20",
+    "python": "3.11.17",
+    "gcc": "15.3.0",
+    "miniforge_release": "24.11.3-2",
+    "installer_sha256": "65af53dad30b3fcbd1cb1d4ad62fd3a86221464754844544558aae3a28795189",
+    "explicit_locked_packages": 26
+  }
+}

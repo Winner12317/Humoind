@@ -1,0 +1,39 @@
+{
+  "format": "hiking-official-source-bundle-v1",
+  "project": "Hiking in the Wild",
+  "project_url": "https://project-instinct.github.io/hiking-in-the-wild/",
+  "paper_url": "https://arxiv.org/abs/2601.07718",
+  "source_package_url": "https://drive.google.com/file/d/10tQylYHdKLVDVnmVHrygLB70neHnPdoF/view",
+  "source_download_url": "https://drive.usercontent.google.com/download?id=10tQylYHdKLVDVnmVHrygLB70neHnPdoF&export=download",
+  "source_archive_sha256": "bbba90bdb77bbab19e74cbe9f556ea0b9330ea9d125ad8271d431aa0e37a6609",
+  "source_archive_included": false,
+  "code_reference_repository": "https://github.com/project-instinct/InstinctLab",
+  "code_reference_commit": "de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057",
+  "raw_frames": 18982,
+  "framerate_hz": 50,
+  "raw_transition_seconds": 379.62,
+  "total_bytes": 2740051,
+  "files": {
+    "parkour_motion_without_run_retargetted.npz": {
+      "archive_member": "data&model/parkour_motion_reference/parkour_motion_without_run_retargetted.npz",
+      "bytes": 2737714,
+      "sha256": "7cfb7c1dcaa6f2a55a13c4849be9e17b4c960ce4015c500ac0ddfb9d77f4ba5b",
+      "modified": false
+    },
+    "parkour_motion_without_run.yaml": {
+      "archive_member": "data&model/parkour_motion_reference/parkour_motion_without_run.yaml",
+      "bytes": 61,
+      "sha256": "f79e5bbc9207976e1610459ab3727a9e1da6d5c0c6cc75793dcec34b81cb7679",
+      "modified": false
+    },
+    "README.md": {
+      "archive_member": "data&model/README.md",
+      "bytes": 2276,
+      "sha256": "ef5f61f763d5fa16f4a6f9598086b5ed624863a8f6ee151ef2439af13efb51ce",
+      "modified": false
+    }
+  },
+  "provenance": "Original members of the fixed author-provided public Data & Model package, copied without modification.",
+  "excluded": "Author checkpoints and generated or mirrored MuJoCo caches are not included.",
+  "data_license_note": "The public package contains no separate data-license text. This manifest does not assign a data license or infer it from the code license. Copyright and other rights remain with upstream rights holders."
+}
