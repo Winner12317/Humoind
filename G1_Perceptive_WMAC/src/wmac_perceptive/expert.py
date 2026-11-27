@@ -1,6 +1,7 @@
 """Audited AMP experts for locomotion-only and historical joint training."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import torch
@@ -279,6 +280,14 @@ class PerceptiveExpertPairs(ExpertPairs):
         from .hiking_amp import FRAME_DIM, HISTORY_LENGTH, frame
 
         source = Path(__file__).resolve().parents[2] / "src/assets/motions/g1/amp"
+        project = Path(__file__).resolve().parents[2]
+        manifest = json.loads((project / "reproduce/MANIFEST.json").read_text())["source_files"]
+        prefix = "src/assets/motions/g1/amp/WalkandRun/"
+        expected = {name[len(prefix):]: digest for name, digest in manifest.items() if name.startswith(prefix)}
+        actual = {path.name: file_sha256(path) for path in (source / "WalkandRun").glob("*.npz")}
+        if len(expected) != 17 or actual != expected:
+            raise ValueError("Historical v3 training requires the 17 licensed WalkandRun NPZ files "
+                             "with the original hashes. See reproduce/QUICKSTART.md#historical-v3-training.")
         paths = prepare_locomotion_dataset(
             source, root / "legacy_local_walk_turn_v2", include_hiking=False, include_grail=False,
         )

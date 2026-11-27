@@ -1,0 +1,480 @@
+[Perceptive WMAC] log_dir=/home/yao/Humoind project/G1_Perceptive_WMAC/logs/wmac_perceptive/2026-11-25_19-37-28_774094_seed42_repro_v3_compiled_smoke
+[Perceptive WMAC] config={"action_limit": null, "actor_batch_size": 16, "actor_betas": [0.9, 0.95], "actor_grad_value_clip": 0.1, "actor_lr": 0.0002, "actor_microbatch_size": 0, "actor_stall_warning_iterations": 200, "actor_trust_coef": 0.0, "actor_type": "moe", "actor_updates": 1, "allow_recovery_semantics_migration": false, "amp_feature_schema": "hiking_v1", "amp_normalizer_clip": 10.0, "amp_normalizer_epsilon": 0.0001, "amp_normalizer_initial_count": 0.0001, "amp_normalizer_per_update": true, "amp_normalizer_until": null, "amp_normalizer_variance_epsilon": true, "amp_reward_coef": 0.25, "benchmark_sync": false, "checkpoint_replay": false, "collect_steps": 8, "collision_horizontal_scale": 0.05, "compile": true, "compile_fullgraph": false, "compile_mode": "default", "critic_bootstrap": true, "critic_epochs": 5, "critic_hidden": [256, 128], "critic_lr": 0.0002, "critic_minibatches": 4, "critic_warmup_iterations": 0, "cuda_graphs": true, "depth_dropout_probability": 0.0, "depth_loss_coef": 1.0, "depth_mask_loss_coef": 1.0, "depth_noise_std_m": 0.0, "depth_rollout_error_ratio": 1.5, "device": "cuda:0", "direct_style_grad": true, "discriminator_batch_size": 32, "discriminator_head_weight_decay": 0.04, "discriminator_hidden": [1024, 512], "discriminator_lr": 0.0001, "discriminator_optimizer": "adamw", "discriminator_trunk_weight_decay": 0.0003, "discriminator_updates": 2, "dynamics_decimation": 4, "dynamics_dt": 0.02, "dynamics_parameterization": "supermimic_gencoord_v1", "evaluation_envs": 32, "evaluation_interval": 0, "evaluation_steps": 250, "execution_optimizer": "muon_adam", "execution_profile": "supermimic", "expert_recovery_fraction": 0.0, "exploration_noise": 0.1, "gae_lambda": 0.95, "gamma": 0.99, "gradient_penalty": 5.0, "graph_warmup": 3, "ground_height_semantics": "per_point_terrain_v1", "hiking_training_version": 3, "horizon_growth_updates": 100, "imagination_horizon": 32, "imagination_horizon_start": 32, "init_discriminator": false, "init_policy": null, "iterations": 64, "latent_dim": 128, "latent_loss_coef": 1.0, "latent_recon_coef": 1.0, "latent_recon_images": 16, "latent_rollout_error_ratio": 1.5, "latent_stat_rate": 0.01, "locomotion_objective": "hiking_full_v1", "log_interval": 1, "log_root": "logs/wmac_perceptive", "lr_decay_iterations": 250000, "lr_final_fraction": 1.0, "max_action_shift": 0.25, "max_grad_norm": 1.0, "max_model_loss_for_actor": 20.0, "max_validation_contact_error": 2.0, "max_validation_depth_error": 0.15, "max_validation_latent_error": null, "max_validation_mask_error": 0.15, "max_validation_model_error": 20.0, "migrate_perception_training": false, "migrate_world_model": false, "mirrored_motion_root": ".perceptive_cache/sources/hiking", "model_hidden": [128, 128], "model_warmup_iterations": 0, "moe_expert_hidden": [256, 128, 64], "moe_gate_hidden": [], "moe_init_noise_std": 0.0, "moe_load_balance_coef": 0.0, "moe_num_experts": 4, "moe_router_z_coef": 0.0, "moe_temperature": 1.0, "moe_top_k": 4, "moe_variant": "hiking", "motion_data_protocol": "hiking_walk_v1", "motion_scope": "forward_walk_turn_v1", "num_envs": 16, "observation_normalizer_until": 100000000.0, "perception_training_version": 2, "policy_hidden": [512, 256, 128], "policy_output_init_scale": 1.0, "policy_output_zero_bias": false, "precision": "tf32", "preset": "full", "profile": "ppo_aligned", "real_critic_batch_size": 2048, "real_critic_coef": 0.0, "recovery_counter_semantics": "hard_forward_v2", "recovery_flat_fraction": 0.0, "recovery_fraction": 0.0, "recovery_height_reward": "upright_v2", "replay_device": "cuda:0", "replay_steps": 80, "replay_storage": "frame_uint8", "resume": null, "reward_chunk_size": 32768, "run_name": "repro_v3_compiled_smoke", "save_interval": 5, "seed": 42, "sensor_protocol": "g1_hiking_calibrated_v1", "standing_expert_source": "none", "style_weight": 1.0, "survival_grad": true, "task": "Unitree-G1-AMP-Perceptive-Hiking", "task_weight": 1.0, "terrain_cols": 20, "terrain_rows": 10, "training_schedule": "supermimic_v1", "utd": 1.0, "validation_batch_size": 256, "validation_env_fraction": 0.0, "validation_horizon": 32, "validation_interval": 10, "validation_min_recovery_samples": 0, "validation_min_walk_samples": 8, "visual_mode": "instinct_latent_v1", "walking_expert_source": "pre_hiking_local_walk_turn_v2", "warmup_steps": 8, "wm_batch_size": 32, "wm_updates": 1, "wm_window": 7, "world_model_lr": 0.0002}
+[Perceptive WMAC] Hiking unshod G1 task, camera=g1_hiking_calibrated_v1, Hiking and historical walking references. Iterations count vector control steps.
+[Perceptive WMAC] InstinctMJ joint-stack latent vision: online reconstruction trains E; Actor uses stopped visual gradients; GenCoord physics retained.
+Setting seed: 42
+Warp 1.12.0 initialized:
+   CUDA Toolkit 12.9, Driver 13.0
+   Devices:
+     "cpu"      : "x86_64"
+     "cuda:0"   : "NVIDIA GeForce RTX 4080" (16 GiB, sm_89, mempool enabled)
+   Kernel cache:
+     /home/yao/.cache/warp/1.12.0
+Curriculum terrain generation took 13.3362 seconds.
+Warp DeprecationWarning: The symbol `warp.context.runtime` will soon be removed from the public API. It can still be accessed from `warp._src.context.runtime` but might be changed or removed without notice.
+Module mujoco_warp._src.smooth 95a0b8b load on device 'cuda:0' took 2.16 ms  (cached)
+Module mujoco_warp._src.collision_driver 88f7770 load on device 'cuda:0' took 0.24 ms  (cached)
+Module _nxn_broadphase__locals__kernel_e73b1315 e73b131 load on device 'cuda:0' took 0.26 ms  (cached)
+Module ccd_hfield_kernel_builder__locals__ccd_hfield_kernel_aa8a462a aa8a462 load on device 'cuda:0' took 1.23 ms  (cached)
+Module ccd_hfield_kernel_builder__locals__ccd_hfield_kernel_0100ba87 0100ba8 load on device 'cuda:0' took 1.30 ms  (cached)
+Module _primitive_narrowphase__locals__primitive_narrowphase_85cf4a28 85cf4a2 load on device 'cuda:0' took 0.66 ms  (cached)
+Module mujoco_warp._src.constraint 27c5750 load on device 'cuda:0' took 1.43 ms  (cached)
+Module _efc_contact_init__locals__kernel_346f6f0c 346f6f0 load on device 'cuda:0' took 0.29 ms  (cached)
+Module _efc_contact_jac_sparse__locals__kernel_86e47ecb 86e47ec load on device 'cuda:0' took 0.27 ms  (cached)
+Module _efc_contact_update__locals__kernel_90315d53 90315d5 load on device 'cuda:0' took 0.32 ms  (cached)
+Module mujoco_warp._src.forward b4bf9c3 load on device 'cuda:0' took 0.86 ms  (cached)
+Module mujoco_warp._src.passive 1a5e55c load on device 'cuda:0' took 0.61 ms  (cached)
+Module mujoco_warp._src.sensor 7fc0378 load on device 'cuda:0' took 1.58 ms  (cached)
+Module mujoco_warp._src.forward ab3b1a6 load on device 'cuda:0' took 0.86 ms  (cached)
+Module mujoco_warp._src.support dd3f924 load on device 'cuda:0' took 0.26 ms  (cached)
+Module _solve_LD_sparse_fused__locals__kernel_1fa39e57 d8b2e39 load on device 'cuda:0' took 0.33 ms  (cached)
+Module mujoco_warp._src.solver b116efb load on device 'cuda:0' took 0.97 ms  (cached)
+Module solve_init_jaref__locals__kernel_4fbb9903 4fbb990 load on device 'cuda:0' took 0.25 ms  (cached)
+Module mul_m_sparse__locals___mul_m_sparse_0e88d329 0e88d32 load on device 'cuda:0' took 0.25 ms  (cached)
+Module update_constraint_efc__locals__kernel_32935e9d 32935e9 load on device 'cuda:0' took 0.25 ms  (cached)
+Module update_constraint_gauss_cost__locals__kernel_8d3b04b4 8d3b04b load on device 'cuda:0' took 0.23 ms  (cached)
+Module update_gradient_cholesky_blocked__locals__kernel_3f89bed4 cfaeb41 load on device 'cuda:0' took 91.17 ms  (cached)
+Module linesearch_jv_fused__locals__kernel_6013127f 6013127 load on device 'cuda:0' took 0.32 ms  (cached)
+Module linesearch_prepare_gauss__locals__kernel_ab9336f7 ab9336f load on device 'cuda:0' took 0.27 ms  (cached)
+Module update_constraint_efc__locals__kernel_3c1a9816 3c1a981 load on device 'cuda:0' took 0.29 ms  (cached)
+Module update_gradient_cholesky_blocked_skip_unchanged__locals__kernel_b35f4e9a 59f6439 load on device 'cuda:0' took 98.11 ms  (cached)
+Module _contact_sort__locals__contact_sort_53bebbc3 2b12f7b load on device 'cuda:0' took 0.36 ms  (cached)
+Module mujoco_warp._src.derivative a753363 load on device 'cuda:0' took 0.55 ms  (cached)
+Module reset_data__locals__reset_xfrc_applied_e7898c5c e7898c5 load on device 'cuda:0' took 0.27 ms  (cached)
+Module reset_data__locals__reset_qM_10d3c793 10d3c79 load on device 'cuda:0' took 0.24 ms  (cached)
+Module reset_data__locals__reset_mocap_ff71f630 ff71f63 load on device 'cuda:0' took 0.23 ms  (cached)
+Module reset_data__locals__reset_contact_df686d47 df686d4 load on device 'cuda:0' took 0.24 ms  (cached)
+Module reset_data__locals__reset_nworld_6e0d904e 6e0d904 load on device 'cuda:0' took 0.26 ms  (cached)
+Module mujoco_warp._src.render_util 94fd13e load on device 'cuda:0' took 0.42 ms  (cached)
+Module mujoco_warp._src.bvh 08f985a load on device 'cuda:0' took 0.59 ms  (cached)
+Module mujoco_warp._src.ray c8f2bb3 load on device 'cuda:0' took 0.73 ms  (cached)
+Module src.tasks.amp_perceptive.sensors 6605439 load on device 'cuda:0' took 0.37 ms  (cached)
+
++---------------------------------+
+|         Base Environment        |
++------------------------+--------+
+| Property               | Value  |
++------------------------+--------+
+| Number of environments | 16     |
+| Environment device     | cuda:0 |
+| Environment seed       | 42     |
+| Physics step-size      | 0.005  |
+| Environment step-size  | 0.02   |
++------------------------+--------+
+
+[INFO] <EventManager> contains 2 active terms.
++-------------------------------------+
+| Active Event Terms in Mode: 'reset' |
++--------+----------------------------+
+| Index  | Name                       |
++--------+----------------------------+
+|   0    | reset_hiking_state         |
++--------+----------------------------+
++---------------------------------------+
+| Active Event Terms in Mode: 'startup' |
++----------+----------------------------+
+|  Index   | Name                       |
++----------+----------------------------+
+|    0     | physics_material           |
++----------+----------------------------+
++-----------------------------+
+| Domain Randomization Fields |
++--------+--------------------+
+| Index  | Field Name         |
++--------+--------------------+
+|   0    | geom_friction      |
++--------+--------------------+
+
+Module repeat_array_kernel_39317a34 b712927 load on device 'cuda:0' took 0.29 ms  (cached)
+[INFO] <CommandManager> contains 1 active terms.
++------------------------------------------+
+|           Active Command Terms           |
++-------+-------+--------------------------+
+| Index | Name  |           Type           |
++-------+-------+--------------------------+
+|   0   | twist | FlatPatchVelocityCommand |
++-------+-------+--------------------------+
+
+[INFO] <ActionManager> contains 1 active terms.
++---------------------------------+
+| Active Action Terms (shape: 29) |
++-------+-----------+-------------+
+| Index | Name      |   Dimension |
++-------+-----------+-------------+
+|   0   | joint_pos |          29 |
++-------+-----------+-------------+
+
+[INFO] <ObservationManager> contains 3 groups.
++------------------------------------------------------------+
+| Active Observation Terms in Group: 'actor' (shape: (768,)) |
++--------+------------------------+--------------------------+
+| Index  | Name                   |          Shape           |
++--------+------------------------+--------------------------+
+|   0    | base_ang_vel           |     (24,)  ← 8×(3,)      |
+|   1    | projected_gravity      |     (24,)  ← 8×(3,)      |
+|   2    | command                |     (24,)  ← 8×(3,)      |
+|   3    | joint_pos              |    (232,)  ← 8×(29,)     |
+|   4    | joint_vel              |    (232,)  ← 8×(29,)     |
+|   5    | actions                |    (232,)  ← 8×(29,)     |
++--------+------------------------+--------------------------+
++-------------------------------------------------------------+
+| Active Observation Terms in Group: 'critic' (shape: (136,)) |
++--------+-----------------------+----------------------------+
+| Index  | Name                  |           Shape            |
++--------+-----------------------+----------------------------+
+|   0    | physical_context      |     (136,)  ← 1×(136,)     |
++--------+-----------------------+----------------------------+
++------------------------------------------------------------------+
+| Active Observation Terms in Group: 'perception' (shape: (4608,)) |
++---------+-----------------------+--------------------------------+
+|  Index  | Name                  |             Shape              |
++---------+-----------------------+--------------------------------+
+|    0    | depth_and_valid       |      (4608,)  ← 1×(4608,)      |
++---------+-----------------------+--------------------------------+
+
+[INFO] <TerminationManager> contains 5 active terms.
++-------------------------------------+
+|       Active Termination Terms      |
++-------+------------------+----------+
+| Index | Name             | Time Out |
++-------+------------------+----------+
+|   0   | time_out         |   True   |
+|   1   | bad_base_height  |  False   |
+|   2   | bad_orientation  |  False   |
+|   3   | base_contact     |  False   |
+|   4   | terrain_boundary |   True   |
++-------+------------------+----------+
+
+[INFO] <RewardManager> contains 26 active terms.
++-----------------------------------------------+
+|              Active Reward Terms              |
++-------+---------------------------+-----------+
+| Index | Name                      |    Weight |
++-------+---------------------------+-----------+
+|   0   | track_lin_vel_xy_exp      |       2.0 |
+|   1   | track_ang_vel_z_exp       |       2.0 |
+|   2   | heading_error             |      -1.0 |
+|   3   | dont_wait                 |      -0.5 |
+|   4   | is_alive                  |       3.0 |
+|   5   | stand_still               |      -0.3 |
+|   6   | volume_points_penetration |      -4.0 |
+|   7   | feet_air_time             |       0.5 |
+|   8   | feet_slide                |      -0.4 |
+|   9   | joint_deviation_hip       |      -0.5 |
+|   10  | ang_vel_xy_l2             |     -0.05 |
+|   11  | dof_torques_l2            |  -1.5e-07 |
+|   12  | dof_acc_l2                | -1.25e-07 |
+|   13  | dof_vel_l2                |   -0.0001 |
+|   14  | action_rate_l2            |    -0.005 |
+|   15  | flat_orientation_l2       |      -3.0 |
+|   16  | pelvis_orientation_l2     |      -3.0 |
+|   17  | feet_flat_ori             |      -0.4 |
+|   18  | feet_at_plane             |      -0.1 |
+|   19  | feet_close_xy             |       0.4 |
+|   20  | energy                    |    -5e-05 |
+|   21  | freeze_upper_body         |    -0.004 |
+|   22  | dof_pos_limits            |      -1.0 |
+|   23  | dof_vel_limits            |      -1.0 |
+|   24  | torque_limits             |     -0.01 |
+|   25  | undesired_contacts        |      -1.0 |
++-------+---------------------------+-----------+
+
+[INFO] <CurriculumManager> contains 1 active terms.
++-------------------------+
+| Active Curriculum Terms |
++-------+-----------------+
+| Index | Name            |
++-------+-----------------+
+|   0   | terrain_levels  |
++-------+-----------------+
+
+[INFO] <MetricsManager> contains 1 active terms.
++-------------------------+
+|   Active Metrics Terms  |
++-------+-----------------+
+| Index | Name            |
++-------+-----------------+
+|   0   | mean_action_acc |
++-------+-----------------+
+
+[WMAC] K=7, H=32, actor_batch=16, precision=tf32, compile=True; first calls include compilation
+[WMAC] MoE Actor: E=4, top_k=4; Hiking dense Softmax fusion; no Actor normalization or output tanh. Other heads retain their compilation settings. Router auxiliary coefficients: balance=0.0, z=0.0
+[WMAC] Actor architecture: {"action_limit": null, "actor_type": "moe", "moe_gate_hidden": [], "moe_num_experts": 4, "moe_temperature": 1.0, "moe_top_k": 4, "moe_variant": "hiking", "observation_normalization": false, "policy_hidden": [256, 128, 64]}
+[Perceptive WMAC] replay_layout=hiking_lossless_frame_uint8_v3; sim nconmax=256, njmax=700, ccd_iterations=128, contact_sensor_maxmatch=128
+/home/yao/.local/share/g1-perceptive-wmac/env/lib/python3.11/site-packages/torch/_inductor/lowering.py:7007: UserWarning: 
+Online softmax is disabled on the fly since Inductor decides to
+split the reduction. Cut an issue to PyTorch if this is an
+important use case and you want to speed it up with online
+softmax.
+
+  warnings.warn(
+/home/yao/.local/share/g1-perceptive-wmac/env/lib/python3.11/site-packages/torch/_inductor/lowering.py:7007: UserWarning: 
+Online softmax is disabled on the fly since Inductor decides to
+split the reduction. Cut an issue to PyTorch if this is an
+important use case and you want to speed it up with online
+softmax.
+
+  warnings.warn(
+[WMAC] iter=1 sim=144 imag=512 wall=218.5s wm=5.67 val=nan actor=-1.51 active=1 sec_per_iter=217.69 vector_step=9
+[WMAC] iter=2 sim=272 imag=1024 wall=219.2s wm=5.7 val=nan actor=-1.48 active=1 sec_per_iter=0.64 vector_step=17
+[WMAC] iter=3 sim=400 imag=1536 wall=251.8s wm=5.47 val=nan actor=-0.939 active=1 sec_per_iter=32.59 vector_step=25
+[WMAC] iter=4 sim=528 imag=2048 wall=256.1s wm=5.49 val=nan actor=-0.911 active=1 sec_per_iter=4.37 vector_step=33
+[WMAC] iter=5 sim=656 imag=2560 wall=256.8s wm=5.23 val=nan actor=-0.941 active=1 sec_per_iter=0.71 vector_step=41
+[WMAC] iter=6 sim=784 imag=3072 wall=273.7s wm=4.67 val=nan actor=-1.01 active=1 sec_per_iter=16.81 vector_step=49
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+height field collision overflow, number of collisions >= 50 - please adjust resolution: 
+ decrease the number of hfield rows/cols or modify size of colliding geom
+[WMAC] iter=7 sim=912 imag=3584 wall=274.3s wm=4.92 val=nan actor=-0.778 active=1 sec_per_iter=0.64 vector_step=57

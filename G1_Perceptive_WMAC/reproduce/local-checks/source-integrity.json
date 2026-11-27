@@ -1,0 +1,9 @@
+{
+  "document_sha256": "60d46a9553f54e2c9b40c9381747c608b65c91595d2f4df0a3fda2b85568bdc9",
+  "archive_sha256": "ecd718333366994ea664539efcc683941364af02d42b1e8a86c7f8954e9ceacc",
+  "payload_parts": 140,
+  "payload_bytes": 2380708,
+  "base_commit": "6c7a2947fccc973e4af8e6d90e550400f1b6fcfc",
+  "source_hashes_checked": 417,
+  "overlay_hashes_checked": 281
+}

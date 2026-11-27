@@ -1,0 +1,67 @@
+Hiking reference attribution
+
+Paper: Hiking in the Wild: A Scalable Perceptive Parkour Framework for Humanoids
+https://arxiv.org/abs/2601.07718
+Project: https://project-instinct.github.io/hiking-in-the-wild/
+
+Environment and configuration reference:
+project-instinct/InstinctLab, commit de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057
+https://github.com/project-instinct/InstinctLab/tree/de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057
+Upstream LICENSE: Creative Commons Attribution-NonCommercial 4.0 International
+https://github.com/project-instinct/InstinctLab/blob/de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057/LICENSE
+
+Network, preprocessing and AMP algorithm reference:
+project-instinct/instinct_rl, commit 574c8d50cdd16618cf8f4e0df553f84759c1d837
+https://github.com/project-instinct/instinct_rl/tree/574c8d50cdd16618cf8f4e0df553f84759c1d837
+Upstream LICENSE: Modified MIT License, Copyright (c) 2026 Ziwen Zhuang
+https://github.com/project-instinct/instinct_rl/blob/574c8d50cdd16618cf8f4e0df553f84759c1d837/LICENSE
+
+Current fresh training uses motion_data_protocol=hiking_walk_v1 and
+sensor_protocol=hiking_depth_only_v1. It adapts the official complete walking
+file selection, bilinear motion interpolation, forward-difference velocity
+calculation, sagittal symmetry, 67-dimensional AMP observations over ten frames,
+and independent standing resets. The AMP discriminator loss and update adapt
+Instinct RL's Wasabi implementation. AMP inputs omit the former local ground
+height proxies and running normalization. Depth learning uses eight depth-only
+channels; raw validity remains diagnostic and is excluded from learned vision.
+
+The hiking_full_v1 task additionally adapts all26 ordinary-G1 rewards,
+eight-sample term-major proprioception, source ideal-PD actuator parameters
+and reset-sampled delays, terrain-specific commands/tracking curriculum,
+and the complete ten-family source terrain arrays at5cm. Sharp-edge
+extraction, greedy edge merging and virtual-cylinder penetration adapt
+sensors/volume_points and terrains/virtual_obstacle/edge_cylinder.py.
+The physical MuJoCo surface uses heightfield triangles and rotated convex
+boxes; it cannot reproduce PhysX's slope-threshold vertex displacement,
+two-coefficient friction law, restitution or solver joint-velocity limit.
+These engine limitations are recorded explicitly. Torso resets/observations
+are transformed through FK into the local pelvis-root model. The historical
+walking task retains its original coarser collision fields and task settings.
+Training version 3 uses the ordinary unshod G1ParkourRoughEnvCfg. Its original
+g1_29dof_torsobase_popsicle.urdf and head_link.STL are included under
+src/assets/robots/unitree_g1; the head is named hiking_head_link.STL there.
+Both are from source/instinctlab/instinctlab/assets/resources/unitree_g1 in
+the InstinctLab commit above (urdf/ and meshes/, respectively). The local
+adapter re-roots this asset at the pelvis for GenCoord and converts the source
+cylinders to capsules as requested by the original URDF importer.
+World-model, Actor and Critic
+updates follow SuperMimic, while the visual latent follows InstinctMJ. The
+walking task has no get-up objective. These are documented framework and model
+adaptations, not a complete reproduction of the original Hiking PPO pipeline.
+
+Historical filtered_walk_turn_v2 and local_depth_valid_v1 checkpoints retain
+their saved filtering, ground-height features, camera and validity-channel
+semantics. Earlier joint walking/get-up experiments remain available only with
+their explicit historical task and checkpoint configuration.
+
+Published training source does not include IsaacLab, author checkpoints or the
+full Hiking motion archive. Three unmodified official motion source files are
+bundled under src/assets/motions/g1/hiking_official, with upstream attribution
+and fixed file digests. They populate an ignored local cache without a network
+request. Code attribution does not establish separate terms for motion data.
+
+Complete InstinctLab and Instinct RL license texts are included in
+../../../licenses/instinctlab-CC-BY-NC-4.0.txt and
+../../../licenses/instinct-rl-Modified-MIT.txt. Additional source attribution
+and the distinct InstinctMJ and SuperMimic licenses appear in
+../../../THIRD_PARTY_NOTICES.md.

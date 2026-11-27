@@ -20,3 +20,10 @@ __pycache__/
 /pm01_retarget/pm01_csv/
 /pm01_retarget/pm01_npz_50hz/
 /pm01_retarget/qa/
+
+# Locally licensed motion inputs and reconstructed pose archives
+/G1_Perceptive_WMAC/motion_data_csv/amp/
+/G1_Perceptive_WMAC/src/assets/motions/g1/amp/
+/SuperAMP/src/assets/motions/pm01/amp/
+/SuperAMP/src/assets/motions/pm01/amp_clean/
+/pm01_sim2sim/policy*/start_poses.npz

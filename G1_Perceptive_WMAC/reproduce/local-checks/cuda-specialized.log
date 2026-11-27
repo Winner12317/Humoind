@@ -1,0 +1,9 @@
+test_frame_can_be_captured_without_cpu_to_gpu_constant_copy (test_hiking_amp.HikingAmpFeaturesTest.test_frame_can_be_captured_without_cpu_to_gpu_constant_copy) ... ok
+test_side_stream_warmup_capture_replay_and_reused_storage_match_eager (test_wm_macro_direct_staging.DirectStagingCudaTest.test_side_stream_warmup_capture_replay_and_reused_storage_match_eager) ... ok
+test_actual_4096_environment_budget_tf32_discriminator_and_optimizer (test_hiking_amp_logical_execution.HikingAmpLogicalCudaTest.test_actual_4096_environment_budget_tf32_discriminator_and_optimizer) ... ok
+test_small_double_logical_capture_real_updates_and_rebinding (test_hiking_amp_logical_execution.HikingAmpLogicalCudaTest.test_small_double_logical_capture_real_updates_and_rebinding) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.860s
+
+OK

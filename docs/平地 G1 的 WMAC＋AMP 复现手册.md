@@ -4,6 +4,8 @@
 
 
 
+> 本文记录历史实验。恢复原始数据需要本地有权使用的副本，当前仓库的安装与重建步骤见[动作数据及恢复说明](../SuperAMP/docs/pm01/MOTION_SOURCES.md)。要运行下方的历史恢复脚本，请先设置 `AMP_LICENSED_BASE_CHECKOUT`，指向已获许可、且具有基线提交 `6c7a2947` 和原始动作的本地 Git 仓库。
+
 版本为 2026\-11\-20。正式启动命令对应当前 `local_4096_ppo_amp_budget` 训练，使用 `supermimic_official`、居中 AMP、v3 平滑成本、4096 环境，以及每轮两次、每批 25600 对的判别器训练。该配置的 checkpoint 协议为 v12。
 
 
@@ -118,7 +120,7 @@ Linux x86\_64、Python3\.11和CUDA12\.6轮子是本文安装范围；默认4096�
 ```Bash
 cat > "$HOME/reproduce_amp_wmac_smooth.sh" <<'AMP_REPRO_SCRIPT'
 #!/usr/bin/env bash
-# Reconstruct this exact flat AMP/WMAC snapshot from public GitHub and the
+# Reconstruct this exact flat AMP/WMAC snapshot from an authorized local baseline and the
 # payload embedded in the complete manual (or in the standalone script).
 set -eo pipefail
 
@@ -227,10 +229,11 @@ print('[AMP reproduce] Complete source payload checksum OK')
 PY
 
 if [[ ! -e "$AMP_PROJECT_DIR" ]]; then
-  amp_note 'Cloning the public AMP repository; no private remote is used'
+  [[ -n "${AMP_LICENSED_BASE_CHECKOUT:-}" && -d "$AMP_LICENSED_BASE_CHECKOUT" ]] || amp_die 'Set AMP_LICENSED_BASE_CHECKOUT to an authorized local baseline checkout with the reference motions.'
+  amp_note 'Reading the pinned baseline and reference inputs from the authorized local checkout'
+  git -C "$AMP_LICENSED_BASE_CHECKOUT" cat-file -e '6c7a2947fccc973e4af8e6d90e550400f1b6fcfc^{commit}' || amp_die 'The licensed local baseline must contain commit 6c7a2947.'
   git init -q "$AMP_PROJECT_DIR"
-  git -C "$AMP_PROJECT_DIR" remote add origin https://github.com/ccrpRepo/AMP_mjlab.git
-  git -C "$AMP_PROJECT_DIR" fetch --depth 1 origin 6c7a2947fccc973e4af8e6d90e550400f1b6fcfc
+  git -C "$AMP_PROJECT_DIR" fetch --depth 1 "$(cd "$AMP_LICENSED_BASE_CHECKOUT" && pwd -P)" 6c7a2947fccc973e4af8e6d90e550400f1b6fcfc
   git -C "$AMP_PROJECT_DIR" checkout --detach FETCH_HEAD
 else
   [[ -d "$AMP_PROJECT_DIR/.git" && ! -L "$AMP_PROJECT_DIR" ]] || amp_die "Existing path is not a regular Git checkout: $AMP_PROJECT_DIR"
@@ -385,7 +388,7 @@ bash "$HOME/reproduce_amp_wmac_smooth.sh" \
 
 
 
-默认依次执行：载荷校验→公开GitHub固定提交clone→应用补丁→源码与资产哈希校验→创建独立Conda环境→安装锁定依赖→安装history补丁→CPU测试→本地生成镜像→小规模GPU烟测。**默认不会自动启动40万轮正式训练。**
+默认依次执行：载荷校验→已授权本地基线固定提交提取→应用补丁→源码与资产哈希校验→创建独立Conda环境→安装锁定依赖→安装history补丁→CPU测试→本地生成镜像→小规模GPU烟测。**默认不会自动启动40万轮正式训练。**
 
 
 
@@ -411,7 +414,7 @@ Bash子进程中的activate不会自动改变外层终端，所以正式训练�
 |---|---|
 |`--document 完整md路径`|从这份文档读取附录；独立自包含脚本可省略|
 |`--workspace 专用本地目录`|整体改变项目/环境/结果位置，默认下面所列目录|
-|`--source-only`|仅公开下载、应用补丁和源码校验，不安装环境/不训练|
+|`--source-only`|仅读取已授权的本地基线、应用补丁和源码校验，不安装环境/不训练|
 |`--skip-gpu-smoke`|仍安装环境、跑CPU和准备数据，只跳过GPU短测；不能据此声称GPU已验证|
 |`--train`|全部准备完成后启动正式4096环境训练，不是更换默认算法|
 

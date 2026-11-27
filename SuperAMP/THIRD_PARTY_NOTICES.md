@@ -66,3 +66,7 @@ It does not reproduce either project's controller, curriculum or training stages
 Source URLs and transfer details are in `docs/SMOOTH_REWARD_ADAPTATION_zh.md`.
 
 License notices: `licenses/HoST-MIT.txt`, `licenses/HumanUP-BSD-3-Clause.txt`.
+
+## Motion data
+
+Training data includes Motion Data by [Bones Studio](https://bones.studio/). Use of the underlying dataset is subject to the [BONES Motion Capture Dataset License Agreement](https://bones.studio/info/seed-license). The recovery motion is from Ubisoft La Forge's LAFAN1 and Unitree Robotics' G1 retarget. See [motion sources and local restoration](docs/pm01/MOTION_SOURCES.md) for credits, data licences and input checksums.

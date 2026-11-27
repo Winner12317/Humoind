@@ -1,0 +1,67 @@
+{
+  "completed": true,
+  "wall_seconds": 127.79168577102246,
+  "torch_cuda_peak_allocated_bytes": 735099904,
+  "torch_cuda_peak_reserved_bytes": 748683264,
+  "torch_memory_scope": "PyTorch allocator; external simulator/driver allocations are additional",
+  "wm_execution_mode": "eager",
+  "wm_forward_backward_graph_captured": false,
+  "wm_full_update_graph_captured": false,
+  "wm_execution_updates": 24,
+  "wm_update_granularity": "minibatch",
+  "wm_graph_persistent_input_bytes": 0,
+  "policy_update_granularity": "separate_Actor_and_Critic",
+  "amp_gp_graph_captured": false,
+  "amp_execution_granularity": "not_captured",
+  "wm_shared_reconstruction": true,
+  "actor_full_update_graph_captured": false,
+  "critic_full_update_graph_captured": false,
+  "replay_storage": {
+    "layout_version": 3,
+    "storage_protocol": "hiking_lossless_frame_uint8_v3",
+    "logical_dimensions": {
+      "capacity_steps": 80,
+      "num_envs": 16,
+      "actor_history": 768,
+      "context": 129,
+      "next_context": 129
+    },
+    "unique_tensor_storage_bytes": 2911688,
+    "original_layout_estimate_bytes": 7558592,
+    "schema_initialized": true,
+    "estimate_note": "Original-layout estimate includes observed native schema and common fixed replay metadata; excludes transient samples and dynamic prefix caches",
+    "host_numpy_metadata_bytes": 5760,
+    "proprio_frame_bytes": 534528,
+    "sparse_exceptions": {
+      "history": {
+        "current_entries": 0,
+        "total_entries": 0,
+        "bytes": 0
+      },
+      "next_context": {
+        "current_entries": 0,
+        "total_entries": 0,
+        "bytes": 0
+      },
+      "previous_action": {
+        "current_entries": 0,
+        "total_entries": 0,
+        "bytes": 0
+      }
+    },
+    "context_live_events": 39,
+    "context_event_capacity": 64,
+    "context_total_events": 68,
+    "additional_cuda_control_readbacks": 200,
+    "control_readback_bytes_per_add": 64,
+    "control_readback_note": "One combined sharing-mask CPU readback per CUDA add; no measured GPU timing implied"
+  },
+  "simulation_capacity": {
+    "nconmax": 256,
+    "njmax": 700,
+    "ccd_iterations": 128,
+    "contact_sensor_maxmatch": 128,
+    "naconmax": 4096,
+    "naccdmax": 4096
+  }
+}

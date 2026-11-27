@@ -229,3 +229,7 @@ The PM01 preset must exist first; it was created with
 `hhtools robot add <dir with serial_pm01_edu.urdf and meshes/> --name pm01` and then
 edited as described in its `robot.yaml`. The G1 preset comes from
 `python scripts/install_builtin_robots.py --only g1_29dof` in the hhtools clone.
+
+## Motion credits and restoration
+
+Motion Data by [Bones Studio](https://bones.studio/). The published walk/run videos show the G1 source and PM01 retarget side by side. The recovery motion comes from Ubisoft La Forge's LAFAN1, retargeted for G1 by Unitree Robotics. The [motion source guide](../SuperAMP/docs/pm01/MOTION_SOURCES.md) lists the licences, original input layout and checksums for restoring or regenerating the trajectory files locally.

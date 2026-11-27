@@ -1,0 +1,15 @@
+{
+  "clip": "amp_clean/Recovery/fallAndGetUp1_subject1.npz",
+  "clip_sha256": "f269b1659ceda2e323a5c8dae431dc3393f3a65dffd22b97772ab8d5c58f444a",
+  "frames": [
+    57,
+    117,
+    447,
+    741,
+    1089,
+    1966,
+    2320,
+    2381
+  ],
+  "fps": 50.0
+}

@@ -1,0 +1,8 @@
+{
+  "sample_count": 982,
+  "output_values": 22586,
+  "max_abs_error": 6.67572021484375e-06,
+  "mean_abs_error": 3.407506055633139e-07,
+  "rms_error": 5.189719395741113e-07,
+  "simulation_control_steps": 10800
+}

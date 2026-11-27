@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore the exact framework from this document and a public GitHub baseline."""
+"""Restore the exact framework from this document and a separately obtained licensed local v3 baseline."""
 from __future__ import annotations
 import argparse
 import base64
@@ -8,12 +8,13 @@ import io
 import json
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import subprocess
 import tarfile
 
 PUBLIC_REPOSITORY = 'https://github.com/ccrpRepo/AMP_mjlab.git'
 PUBLIC_COMMIT = '6c7a2947fccc973e4af8e6d90e550400f1b6fcfc'
-ARCHIVE_SHA256 = 'ecd718333366994ea664539efcc683941364af02d42b1e8a86c7f8954e9ceacc'
+ARCHIVE_SHA256 = '4b6378a91139818b5d459e34a6ee73d01126c105f8ddbdca0a2ce02c2b1460b5'
 
 
 def checked_members(package):
@@ -54,10 +55,15 @@ def main():
     parser.add_argument('--document', required=True, type=Path)
     parser.add_argument('--destination', required=True, type=Path)
     parser.add_argument('--skip-download', action='store_true',
-                        help='Use git archive from --base-checkout for local verification only')
-    parser.add_argument('--base-checkout', type=Path,
-                        help='Existing checkout containing the pinned public baseline commit')
+                        help='Compatibility option; all restorations use a local checkout')
+    parser.add_argument('--base-checkout', required=True, type=Path,
+                        help='Licensed local checkout containing the original v3 G1 motion inputs at the pinned commit')
+    parser.add_argument('--hiking-motion', required=True, type=Path,
+                        help='Original walking NPZ obtained from the Hiking authors')
     args = parser.parse_args()
+    source_motion = args.hiking_motion.resolve()
+    if hashlib.sha256(source_motion.read_bytes()).hexdigest() != '7cfb7c1dcaa6f2a55a13c4849be9e17b4c960ce4015c500ac0ddfb9d77f4ba5b':
+        raise ValueError('The supplied Hiking reference differs from the pinned author release')
     document = args.document.read_text(encoding='utf-8')
     pattern = (r'^WMAC_PAYLOAD_PART ([0-9]{4}) ([0-9]{4})\r?\n'
                r'([A-Za-z0-9+/=\r\n]+)\r?\nWMAC_PAYLOAD_END_PART\r?$')
@@ -90,23 +96,15 @@ def main():
         if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
             raise ValueError('Destination must be absent or an empty directory')
         destination.mkdir(parents=True, exist_ok=True)
-        if args.skip_download:
-            if args.base_checkout is None:
-                raise ValueError('--skip-download requires --base-checkout')
-            # git archive reads committed objects; dirty files are never copied.
-            baseline = subprocess.check_output(['git', '-C', str(args.base_checkout),
-                                                'archive', '--format=tar', PUBLIC_COMMIT])
-            with tarfile.open(fileobj=io.BytesIO(baseline), mode='r:') as package:
-                unpack(package, destination)
-            run('git','-C',str(destination),'init','--quiet')
-        else:
-            run('git','-C',str(destination),'init','--quiet')
-            run('git','-C',str(destination),'remote','add','origin',PUBLIC_REPOSITORY)
-            run('git','-C',str(destination),'fetch','--depth=1','origin',PUBLIC_COMMIT)
-            run('git','-C',str(destination),'checkout','--quiet','--detach','FETCH_HEAD')
+        baseline = subprocess.check_output(['git', '-C', str(args.base_checkout),
+                                            'archive', '--format=tar', PUBLIC_COMMIT])
+        with tarfile.open(fileobj=io.BytesIO(baseline), mode='r:') as package:
+            unpack(package, destination)
+        run('git', '-C', str(destination), 'init', '--quiet')
         # The English README incorporates the separate README from the public base.
         (destination / 'README_zh.md').unlink(missing_ok=True)
         unpack(overlay, destination)
+        shutil.copyfile(source_motion, destination / 'src/assets/motions/g1/hiking_official/parkour_motion_without_run_retargetted.npz')
         for name, expected in manifest['source_files'].items():
             path = destination / name
             if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:

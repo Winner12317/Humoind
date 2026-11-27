@@ -6,14 +6,7 @@ Paper: https://arxiv.org/abs/2601.07718
 Author-provided public Data & Model package:
 https://drive.google.com/file/d/10tQylYHdKLVDVnmVHrygLB70neHnPdoF/view
 
-This directory contains three unmodified files extracted from the author's
-public package: parkour_motion_without_run_retargetted.npz,
-parkour_motion_without_run.yaml and README.md. The NPZ is the complete
-walking-only reference (18,982 raw frames at 50 Hz); the original README also
-describes deployment examples that are not part of this data-only bundle.
-SOURCE_MANIFEST.json records the source archive SHA256, original ZIP member
-paths, byte sizes and individual SHA256 digests. Each bundled data file is
-byte-for-byte identical to its recorded member of the pinned package.
+This directory records the original release's selection YAML, author README, archive paths and SHA-256 digests. Training obtains parkour_motion_without_run_retargetted.npz (18,982 frames at 50 Hz) from the authors. See reproduce/QUICKSTART.md for local cache placement.
 
 The original archive also contains author policy checkpoints. Those weights
 are not included or required to train the local model from scratch. Converted

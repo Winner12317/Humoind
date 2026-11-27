@@ -1,0 +1,107 @@
+{
+  "source_robot": "g1_29dof",
+  "target_robot": "pm01",
+  "calibrated_joint_q": {
+    "J00_HIP_PITCH_L": 0.0,
+    "J01_HIP_ROLL_L": 0.0,
+    "J02_HIP_YAW_L": 0.0,
+    "J03_KNEE_PITCH_L": 0.0,
+    "J04_ANKLE_PITCH_L": 0.0,
+    "J05_ANKLE_ROLL_L": 0.0,
+    "J06_HIP_PITCH_R": 0.0,
+    "J07_HIP_ROLL_R": 0.0,
+    "J08_HIP_YAW_R": 0.0,
+    "J09_KNEE_PITCH_R": 0.0,
+    "J10_ANKLE_PITCH_R": 0.0,
+    "J11_ANKLE_ROLL_R": 0.0,
+    "J12_WAIST_YAW": 0.0,
+    "J13_SHOULDER_PITCH_L": 5.5046333511393796e-05,
+    "J14_SHOULDER_ROLL_L": -0.0627840928203164,
+    "J15_SHOULDER_YAW_L": 0.0013597981860034491,
+    "J16_ELBOW_PITCH_L": -1.3543228116305144,
+    "J17_ELBOW_YAW_L": 0.0,
+    "J18_SHOULDER_PITCH_R": 5.504689953974586e-05,
+    "J19_SHOULDER_ROLL_R": 0.06277211653419656,
+    "J20_SHOULDER_YAW_R": 0.0029192128574537196,
+    "J21_ELBOW_PITCH_R": -1.3543195369345944,
+    "J22_ELBOW_YAW_R": 0.0,
+    "J23_HEAD_YAW": 0.0
+  },
+  "hhtools_proposal_joint_q": {
+    "J00_HIP_PITCH_L": 0.0,
+    "J01_HIP_ROLL_L": 0.0,
+    "J02_HIP_YAW_L": 0.0,
+    "J03_KNEE_PITCH_L": 0.0,
+    "J04_ANKLE_PITCH_L": 0.0,
+    "J05_ANKLE_ROLL_L": 0.0,
+    "J06_HIP_PITCH_R": 0.0,
+    "J07_HIP_ROLL_R": 0.0,
+    "J08_HIP_YAW_R": 0.0,
+    "J09_KNEE_PITCH_R": 0.0,
+    "J10_ANKLE_PITCH_R": 0.0,
+    "J11_ANKLE_ROLL_R": 0.0,
+    "J12_WAIST_YAW": 0.0,
+    "J13_SHOULDER_PITCH_L": -0.33415650614730863,
+    "J14_SHOULDER_ROLL_L": -0.12313351588130247,
+    "J15_SHOULDER_YAW_L": 0.16494647519692723,
+    "J16_ELBOW_PITCH_L": -0.7615397972442136,
+    "J17_ELBOW_YAW_L": 0.23116230003051505,
+    "J18_SHOULDER_PITCH_R": -0.3342098164859355,
+    "J19_SHOULDER_ROLL_R": 0.12330385755261959,
+    "J20_SHOULDER_YAW_R": -0.16125514453766623,
+    "J21_ELBOW_PITCH_R": -0.7618874736930874,
+    "J22_ELBOW_YAW_R": -0.23138495504778606,
+    "J23_HEAD_YAW": 0.0
+  },
+  "arms": {
+    "left": {
+      "g1_upper_arm_axis": [
+        -5e-05,
+        6e-05,
+        -1.0
+      ],
+      "g1_forearm_axis": [
+        1.0,
+        -0.00019,
+        -5e-05
+      ],
+      "upper_arm_axis_error_deg": 0.0,
+      "forearm_axis_error_deg": 0.0
+    },
+    "right": {
+      "g1_upper_arm_axis": [
+        -5e-05,
+        -6e-05,
+        -1.0
+      ],
+      "g1_forearm_axis": [
+        1.0,
+        0.00019,
+        -5e-05
+      ],
+      "upper_arm_axis_error_deg": 0.0,
+      "forearm_axis_error_deg": 0.0
+    }
+  },
+  "assessment": {
+    "valid": true,
+    "score": 0.9153598069444444,
+    "edge_errors_deg": {
+      "left_upper_arm": 9.368783,
+      "left_forearm": 6.945466,
+      "right_upper_arm": 9.368748,
+      "right_forearm": 6.930604,
+      "left_thigh": 10.114575,
+      "left_shin": 4.049085,
+      "right_thigh": 10.114593,
+      "right_shin": 4.049085
+    },
+    "alignment_warnings": [],
+    "symmetry_errors_deg": {
+      "upper_arm": 4e-05,
+      "forearm": 0.036274,
+      "thigh": 0.000262,
+      "shin": 0.0
+    }
+  }
+}

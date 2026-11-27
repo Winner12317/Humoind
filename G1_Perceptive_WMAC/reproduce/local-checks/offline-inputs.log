@@ -1,0 +1,31 @@
+[hiking-data] Using verified official walking data bundled with the repository
+{
+  "source": "/home/yao/Humoind project/G1_Perceptive_WMAC/.perceptive_cache/sources/hiking/parkour_motion_without_run_retargetted.npz",
+  "source_sha256": {
+    "parkour_motion_without_run_retargetted.npz": "7cfb7c1dcaa6f2a55a13c4849be9e17b4c960ce4015c500ac0ddfb9d77f4ba5b",
+    "parkour_motion_without_run.yaml": "f79e5bbc9207976e1610459ab3727a9e1da6d5c0c6cc75793dcec34b81cb7679",
+    "README.md": "ef5f61f763d5fa16f4a6f9598086b5ed624863a8f6ee151ef2439af13efb51ce"
+  },
+  "source_clips": 1,
+  "mirror_probability": 0.5
+}
+[locomotion-data] Built 26 walk/turn clips, 778 frames; Recovery=0
+{
+  "status": "pass",
+  "summary": {
+    "source_clips": 1,
+    "raw_frames": 18982,
+    "hiking_loaded_frames": 18981,
+    "framerate_hz": 50.0,
+    "local_supplement_frames": 389,
+    "grail_frames": 0,
+    "walking_expert_source": "pre_hiking_local_walk_turn_v2",
+    "local_source_clips": 13,
+    "official_history_windows": 37944,
+    "local_history_windows": 544,
+    "sampling": "uniform over valid windows in all original and mirrored clips"
+  },
+  "issues": [],
+  "report": "/home/yao/Humoind project/G1_Perceptive_WMAC/reproduce/motion-audit.json"
+}
+Offline current default expert pool verified: 28 clips, 38488 valid histories; no standing.

@@ -1,0 +1,99 @@
+seed: 42
+num_steps_per_env: 24
+max_iterations: 1500
+obs_groups:
+  actor: !!python/tuple
+  - actor
+  critic: !!python/tuple
+  - critic
+save_interval: 500
+experiment_name: pm01_amp_locomotion
+run_name: ''
+logger: tensorboard
+wandb_project: mjlab
+wandb_tags: !!python/tuple []
+resume: false
+load_run: .*
+load_checkpoint: model_.*.pt
+clip_actions: null
+upload_model: true
+algorithm:
+  num_learning_epochs: 5
+  num_mini_batches: 4
+  learning_rate: 0.001
+  schedule: adaptive
+  gamma: 0.99
+  lam: 0.95
+  entropy_coef: 0.005
+  desired_kl: 0.01
+  max_grad_norm: 1.0
+  value_loss_coef: 1.0
+  use_clipped_value_loss: true
+  clip_param: 0.2
+  normalize_advantage_per_mini_batch: false
+  optimizer: adam
+  share_cnn_encoders: false
+amp_reward_coef: 0.1
+amp_motion_files: /home/yao/Humoind project/SuperAMP/src/assets/motions/pm01/amp
+amp_num_preload_transitions: 200000
+amp_task_reward_lerp: 0.75
+amp_discr_hidden_dims:
+- 1024
+- 512
+- 256
+min_normalized_std:
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+- 0.05
+amp_body_names: !!python/tuple
+- LINK_BASE
+- LINK_HIP_ROLL_L
+- LINK_KNEE_PITCH_L
+- LINK_ANKLE_ROLL_L
+- LINK_HIP_ROLL_R
+- LINK_KNEE_PITCH_R
+- LINK_ANKLE_ROLL_R
+- LINK_SHOULDER_ROLL_L
+- LINK_ELBOW_PITCH_L
+- LINK_ELBOW_YAW_L
+- LINK_SHOULDER_ROLL_R
+- LINK_ELBOW_PITCH_R
+- LINK_ELBOW_YAW_R
+amp_anchor_name: LINK_TORSO_YAW
+amp_feature_schema: legacy
+amp_expert_recovery_fraction: null
+amp_normalizer_use_raw: false
+amp_gp_normalized: false
+policy:
+  actor_hidden_dims:
+  - 512
+  - 256
+  - 128
+  critic_hidden_dims:
+  - 512
+  - 256
+  - 128
+  activation: elu
+  init_noise_std: 1.0
+  noise_std_type: scalar
+empirical_normalization: true

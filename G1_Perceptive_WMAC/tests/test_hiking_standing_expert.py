@@ -134,6 +134,11 @@ class HikingStandingExpertTest(unittest.TestCase):
         official = PerceptiveExpertPairs(cfg, self.env, "cpu", self.source)
         cfg.walking_expert_source = LEGACY_WALKING_EXPERT
         with patch("urllib.request.urlopen", side_effect=AssertionError("Local walking accessed the network")):
+            source = Path(__file__).resolve().parents[1] / "src/assets/motions/g1/amp/WalkandRun"
+            if not any(source.glob("*.npz")):
+                with self.assertRaisesRegex(ValueError, "17 licensed WalkandRun"):
+                    PerceptiveExpertPairs(cfg, self.env, "cpu", self.source)
+                return
             expert = PerceptiveExpertPairs(cfg, self.env, "cpu", self.source)
 
         torch.testing.assert_close(expert.groups[0][:len(official.groups[0])], official.groups[0], rtol=0., atol=0.)

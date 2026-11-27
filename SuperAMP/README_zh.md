@@ -50,7 +50,7 @@ bash scripts/install_env.sh
 
 新环境按 [Linux x86_64 Conda 包清单](docs/reproduction/conda-linux-64.txt)安装 Python 和 pip，避免精简索引省略固定的 Python 版本。
 
-GPU 训练需要远端已安装兼容的 NVIDIA 驱动。Ubuntu 上如缺少系统依赖，可执行 `sudo apt-get install -y curl ca-certificates build-essential libegl1 libgl1 libglfw3`。Humoind 仓库已包含 PM01 训练用的 18 条 NPZ。使用 G1 任务前，请将原始 G1 参考动作恢复到 `src/assets/motions/g1/amp/`，保留 `WalkandRun` 和 `Recovery` 子目录。
+GPU 训练需要远端已安装兼容的 NVIDIA 驱动。Ubuntu 上如缺少系统依赖，可执行 `sudo apt-get install -y curl ca-certificates build-essential libegl1 libgl1 libglfw3`。训练前，请按[动作来源及本地恢复步骤](docs/pm01/MOTION_SOURCES.md)准备已获许可的参考动作。两个机器人各有 17 条行走动作和 1 条倒地起身动作，分别存放在 `src/assets/motions/<robot>/amp/{WalkandRun,Recovery}/`。
 
 PM01 起身修复版的训练与续训命令见 [PM01 文档](docs/pm01/README.md#wmac-with-the-recovery-style-fixes)，清理后的动作位于 `src/assets/motions/pm01/amp_clean`。
 
@@ -166,3 +166,5 @@ python scripts/csv_to_npz.py --help
 
 - 感谢 [unitreerobotics/unitree_rl_mjlab](https://github.com/unitreerobotics/unitree_rl_mjlab) 项目的开源工作与启发。
 - 感谢 [Open-X-Humanoid/TienKung-Lab](https://github.com/Open-X-Humanoid/TienKung-Lab)，本项目在 rsl_rl 的 AMP 部分参考了该实现。
+
+G1 和 PM01 的原始动作来源、数据许可、文件校验和及本地恢复步骤见[动作数据说明](docs/pm01/MOTION_SOURCES.md)。

@@ -1,0 +1,49 @@
+{
+  "audited_utc": "2026-11-27T08:49:24.536355+00:00",
+  "read_only_dataset": true,
+  "issues": [],
+  "checks": {
+    "source_files_match_release": {
+      "passed": true
+    },
+    "selected_files_match_official_yaml": {
+      "passed": true
+    },
+    "complete_unfiltered_trajectory": {
+      "passed": true
+    }
+  },
+  "files": [],
+  "source_files": [
+    {
+      "name": "parkour_motion_without_run_retargetted.npz",
+      "sha256": "7cfb7c1dcaa6f2a55a13c4849be9e17b4c960ce4015c500ac0ddfb9d77f4ba5b"
+    },
+    {
+      "name": "parkour_motion_without_run.yaml",
+      "sha256": "f79e5bbc9207976e1610459ab3727a9e1da6d5c0c6cc75793dcec34b81cb7679"
+    },
+    {
+      "name": "README.md",
+      "sha256": "ef5f61f763d5fa16f4a6f9598086b5ed624863a8f6ee151ef2439af13efb51ce"
+    }
+  ],
+  "source_reconstruction": [],
+  "remote_pinned_urls": [],
+  "dataset_root": "/home/yao/Humoind project/G1_Perceptive_WMAC/.perceptive_cache/sources/hiking",
+  "motion_data_protocol": "hiking_walk_v1",
+  "summary": {
+    "source_clips": 1,
+    "mirror_probability": 0.5,
+    "raw_frames": 18982,
+    "hiking_loaded_frames": 18981,
+    "framerate_hz": 50.0,
+    "reference_start_fraction": [
+      0.0,
+      0.9
+    ],
+    "local_supplement_frames": 0,
+    "grail_frames": 0
+  },
+  "status": "pass"
+}

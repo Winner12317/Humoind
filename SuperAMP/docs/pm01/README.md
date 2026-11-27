@@ -7,6 +7,8 @@ the 18 G1 clips retargeted to PM01 (`<workspace>/pm01_retarget`, 9,992 frames at
 
 ## Train
 
+Prepare the 18 local reference clips and the cleaned set using [Motion sources and local restoration](MOTION_SOURCES.md). The deployment networks can be downloaded separately.
+
 On a Linux GPU server, run `bash scripts/install_env.sh` from the SuperAMP directory.
 Run the activation commands printed by the installer before starting training.
 

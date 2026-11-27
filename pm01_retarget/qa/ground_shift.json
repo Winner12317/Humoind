@@ -1,0 +1,110 @@
+{
+ "Recovery/fallAndGetUp1_subject1": {
+  "input": "pm01_refined/Recovery/fallAndGetUp1_subject1.csv",
+  "planted_sole_height_before_m": 0.00449,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.2616
+ },
+ "WalkandRun/arc_jog_left_loop_002__A029": {
+  "input": "pm01_refined/WalkandRun/arc_jog_left_loop_002__A029.csv",
+  "planted_sole_height_before_m": 0.00093,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.237
+ },
+ "WalkandRun/arc_walk_left_loop_001__A029": {
+  "input": "pm01_refined/WalkandRun/arc_walk_left_loop_001__A029.csv",
+  "planted_sole_height_before_m": 0.00039,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.4537
+ },
+ "WalkandRun/idle_turn_270_001__A048": {
+  "input": "pm01_refined/WalkandRun/idle_turn_270_001__A048.csv",
+  "planted_sole_height_before_m": 0.00055,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.9434
+ },
+ "WalkandRun/idle_turn_360_001__A047": {
+  "input": "pm01_refined/WalkandRun/idle_turn_360_001__A047.csv",
+  "planted_sole_height_before_m": 0.00081,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.8781
+ },
+ "WalkandRun/jog_arc_cw_loop_004__A045": {
+  "input": "pm01_refined/WalkandRun/jog_arc_cw_loop_004__A045.csv",
+  "planted_sole_height_before_m": 0.00068,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.3824
+ },
+ "WalkandRun/jog_backward_loop_002__A022": {
+  "input": "pm01_refined/WalkandRun/jog_backward_loop_002__A022.csv",
+  "planted_sole_height_before_m": 0.00043,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.4499
+ },
+ "WalkandRun/jog_backward_loop_003__A023": {
+  "input": "pm01_refined/WalkandRun/jog_backward_loop_003__A023.csv",
+  "planted_sole_height_before_m": 0.0014,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.4605
+ },
+ "WalkandRun/jog_forward_loop_003__A021": {
+  "input": "pm01_refined/WalkandRun/jog_forward_loop_003__A021.csv",
+  "planted_sole_height_before_m": 0.0009,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.5858
+ },
+ "WalkandRun/jog_forward_loop_003__A022": {
+  "input": "pm01_refined/WalkandRun/jog_forward_loop_003__A022.csv",
+  "planted_sole_height_before_m": 0.00044,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.4504
+ },
+ "WalkandRun/step_rotate_idle_000_002__A026": {
+  "input": "pm01_refined/WalkandRun/step_rotate_idle_000_002__A026.csv",
+  "planted_sole_height_before_m": 0.00034,
+  "root_z_shift_m": 0.0,
+  "planted_share": 1.0
+ },
+ "WalkandRun/walk_arc_cw_loop_002__A046": {
+  "input": "pm01_refined/WalkandRun/walk_arc_cw_loop_002__A046.csv",
+  "planted_sole_height_before_m": 0.00034,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.4735
+ },
+ "WalkandRun/walk_backward_loop_001__A022": {
+  "input": "pm01_refined/WalkandRun/walk_backward_loop_001__A022.csv",
+  "planted_sole_height_before_m": 0.00042,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.5661
+ },
+ "WalkandRun/walk_backward_loop_001__A024": {
+  "input": "pm01_refined/WalkandRun/walk_backward_loop_001__A024.csv",
+  "planted_sole_height_before_m": 0.00068,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.6489
+ },
+ "WalkandRun/walk_forward_loop_002__A022": {
+  "input": "pm01_refined/WalkandRun/walk_forward_loop_002__A022.csv",
+  "planted_sole_height_before_m": 0.00039,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.5956
+ },
+ "WalkandRun/walk_forward_loop_002__A024": {
+  "input": "pm01_refined/WalkandRun/walk_forward_loop_002__A024.csv",
+  "planted_sole_height_before_m": 0.00043,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.5674
+ },
+ "WalkandRun/walk_sideway_left_loop_002__A021": {
+  "input": "pm01_refined/WalkandRun/walk_sideway_left_loop_002__A021.csv",
+  "planted_sole_height_before_m": 0.0012,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.5978
+ },
+ "WalkandRun/walk_sideway_right_loop_001__A022": {
+  "input": "pm01_refined/WalkandRun/walk_sideway_right_loop_001__A022.csv",
+  "planted_sole_height_before_m": 0.00088,
+  "root_z_shift_m": 0.0,
+  "planted_share": 0.6234
+ }
+}

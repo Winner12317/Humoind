@@ -1,0 +1,210 @@
+"""Sagittal motion reflection audited against the actual G1 MJCF.
+
+The reflection plane is y=constant in the source motion's world frame. Linear
+vectors are polar (M v); angular velocities and hinge axes are axial (-M w).
+Quaternions use MuJoCo's wxyz convention and represent M R M, a proper rotation.
+This module has no effects on the original motion files or training tasks.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+import hashlib
+
+import mujoco
+import numpy as np
+
+
+POLAR_SIGN = np.asarray([1., -1., 1.])
+AXIAL_SIGN = np.asarray([-1., 1., -1.])
+QUATERNION_SIGN = np.asarray([1., -1., 1., -1.])
+MOTION_KEYS = frozenset(("fps", "joint_pos", "joint_vel", "body_pos_w", "body_quat_w",
+                         "body_lin_vel_w", "body_ang_vel_w"))
+DEFAULT_G1_XML = Path(__file__).resolve().parents[1]/"assets/robots/unitree_g1/xmls/g1.xml"
+
+
+def opposite_name(name: str) -> str:
+    if name.startswith("left_"):
+        return "right_" + name[5:]
+    if name.startswith("right_"):
+        return "left_" + name[6:]
+    return name
+
+
+@dataclass(frozen=True)
+class G1MirrorMap:
+    joint_names: tuple[str, ...]
+    body_names: tuple[str, ...]
+    joint_permutation: np.ndarray
+    joint_sign: np.ndarray
+    joint_reference: np.ndarray
+    body_permutation: np.ndarray
+    xml_sha256: str
+    maximum_rest_position_asymmetry: float
+
+    def metadata(self) -> dict:
+        return {"joint_names": list(self.joint_names), "body_names": list(self.body_names),
+                "joint_permutation": self.joint_permutation.tolist(),
+                "joint_sign": self.joint_sign.tolist(),
+                "joint_reference": self.joint_reference.tolist(),
+                "body_permutation": self.body_permutation.tolist(),
+                "g1_xml_sha256": self.xml_sha256,
+                "maximum_rest_position_asymmetry_m": self.maximum_rest_position_asymmetry,
+                "convention": "MuJoCo native hinge/body order; quaternions wxyz; sagittal world reflection"}
+
+
+def build_g1_mirror_map(xml_path: Path | str = DEFAULT_G1_XML) -> G1MirrorMap:
+    """Derive signs from actual hinge axes, and reject incompatible topology.
+
+    The supplied G1 has a 10 micrometre shoulder-offset asymmetry. It is
+    retained in the audit instead of silently changing the robot model.
+    """
+    path = Path(xml_path).resolve()
+    model = mujoco.MjModel.from_xml_path(str(path))
+    hinge_ids = np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_HINGE)
+    if model.nq != 36 or len(hinge_ids) != 29 or model.nbody != 31:
+        raise ValueError("Expected the native G1 29-hinge / 30-nonworld-body motion layout")
+    joint_names = tuple(model.joint(int(i)).name for i in hinge_ids)
+    body_names = tuple(model.body(i).name for i in range(1, model.nbody))
+    if any(not name for name in (*joint_names, *body_names)):
+        raise ValueError("Every joint and nonworld body must have an unambiguous name")
+    try:
+        jp = np.asarray([joint_names.index(opposite_name(n)) for n in joint_names], dtype=np.int64)
+        bp = np.asarray([body_names.index(opposite_name(n)) for n in body_names], dtype=np.int64)
+    except ValueError as error:
+        raise ValueError("A left/right counterpart is missing in the robot model") from error
+    if not np.array_equal(jp[jp], np.arange(29)) or not np.array_equal(bp[bp], np.arange(30)):
+        raise ValueError("Robot left/right permutations are not involutions")
+    axes = model.jnt_axis[hinge_ids]
+    reflected_axes = axes[jp] * AXIAL_SIGN
+    signs = np.sum(reflected_axes * axes, axis=-1)
+    if not np.allclose(np.abs(signs), 1., rtol=0, atol=1e-9):
+        raise ValueError("Hinge axes do not support the expected sagittal reflection")
+    signs = np.where(signs > 0, 1., -1.)
+    if not np.allclose(reflected_axes, axes * signs[:, None], rtol=0, atol=1e-9):
+        raise ValueError("Reflected hinge axes are not collinear with counterpart axes")
+    limits = model.jnt_range[hinge_ids]
+    mapped_limits = np.sort(limits[jp] * signs[:, None], axis=-1)
+    if not np.allclose(mapped_limits, limits, rtol=0, atol=1e-6):
+        raise ValueError("Mirrored joint limits differ from the counterpart robot limits")
+    body_ids = np.arange(1, model.nbody)
+    mirrored_body_ids = bp + 1
+    lookup = {int(body): i for i, body in enumerate(body_ids)}
+    for i, body_id in enumerate(body_ids):
+        parent = int(model.body_parentid[body_id])
+        reflected_parent = 0 if parent == 0 else int(mirrored_body_ids[lookup[parent]])
+        if int(model.body_parentid[mirrored_body_ids[i]]) != reflected_parent:
+            raise ValueError("Left/right body trees do not have mirrored parent relationships")
+    rest_error = float(np.max(np.abs(model.body_pos[mirrored_body_ids] - model.body_pos[body_ids]*POLAR_SIGN)))
+    if rest_error > 2e-5:
+        raise ValueError(f"Robot rest offsets are too asymmetric for reflection: {rest_error}m")
+    reflected_q = model.body_quat[body_ids] * QUATERNION_SIGN
+    orientation_agreement = np.abs(np.sum(reflected_q * model.body_quat[mirrored_body_ids], axis=-1))
+    if not np.allclose(orientation_agreement, 1., rtol=0, atol=1e-8):
+        raise ValueError("Robot rest-frame rotations do not obey sagittal reflection")
+    pivots = model.jnt_pos[hinge_ids]
+    if not np.allclose(pivots[jp]*POLAR_SIGN, pivots, rtol=0, atol=1e-9):
+        raise ValueError("Joint pivots do not obey sagittal reflection")
+    qref = model.qpos0[model.jnt_qposadr[hinge_ids]].copy()
+    for array in (jp, bp, signs, qref):
+        array.setflags(write=False)
+    return G1MirrorMap(joint_names, body_names, jp, signs, qref, bp,
+                       hashlib.sha256(path.read_bytes()).hexdigest(), rest_error)
+
+
+def reflect_polar(values: np.ndarray) -> np.ndarray:
+    if values.shape[-1] != 3:
+        raise ValueError("A polar vector must have three components")
+    return values * POLAR_SIGN.astype(values.dtype)
+
+
+def reflect_axial(values: np.ndarray) -> np.ndarray:
+    if values.shape[-1] != 3:
+        raise ValueError("An axial vector must have three components")
+    return values * AXIAL_SIGN.astype(values.dtype)
+
+
+def reflect_quaternion_wxyz(values: np.ndarray) -> np.ndarray:
+    if values.shape[-1] != 4:
+        raise ValueError("A wxyz quaternion must have four components")
+    return values * QUATERNION_SIGN.astype(values.dtype)
+
+
+def validate_motion(motion: dict[str, np.ndarray], mapping: G1MirrorMap) -> int:
+    if set(motion) != MOTION_KEYS:
+        raise ValueError(f"Motion schema differs: missing={sorted(MOTION_KEYS-set(motion))}, "
+                         f"unsupported={sorted(set(motion)-MOTION_KEYS)}")
+    frames = len(motion["joint_pos"])
+    if frames < 2:
+        raise ValueError("A motion clip must contain at least two consecutive frames")
+    expected = {"joint_pos": (frames, len(mapping.joint_names)),
+                "joint_vel": (frames, len(mapping.joint_names)),
+                "body_pos_w": (frames, len(mapping.body_names), 3),
+                "body_quat_w": (frames, len(mapping.body_names), 4),
+                "body_lin_vel_w": (frames, len(mapping.body_names), 3),
+                "body_ang_vel_w": (frames, len(mapping.body_names), 3)}
+    for name, shape in expected.items():
+        values = motion[name]
+        if values.shape != shape or not np.issubdtype(values.dtype, np.floating) or not np.isfinite(values).all():
+            raise ValueError(f"Invalid motion tensor {name}: expected finite floating {shape}")
+    fps = np.asarray(motion["fps"])
+    if fps.size != 1 or not np.isfinite(fps).all() or float(fps.reshape(-1)[0]) <= 0:
+        raise ValueError("Motion fps must be one finite positive scalar")
+    if not np.allclose(np.linalg.norm(motion["body_quat_w"], axis=-1), 1., rtol=0, atol=2e-4):
+        raise ValueError("Motion quaternions must be normalized wxyz rotations")
+    return frames
+
+
+def mirror_motion(motion: dict[str, np.ndarray], mapping: G1MirrorMap | None = None,
+                  *, plane_y: float | None = None) -> dict[str, np.ndarray]:
+    """Return a fresh reflected clip, keeping its fps, duration and frame order.
+
+    The default plane passes through the first pelvis position, preserving the
+    initial world anchor. No temporal reversal, resampling or clip concatenation
+    is performed. Original arrays are never modified.
+    """
+    mapping = build_g1_mirror_map() if mapping is None else mapping
+    validate_motion(motion, mapping)
+    if plane_y is None:
+        plane_y = float(motion["body_pos_w"][0, 0, 1])
+    if not np.isfinite(plane_y):
+        raise ValueError("Reflection plane must be finite")
+    jp, bp = mapping.joint_permutation, mapping.body_permutation
+    q = motion["joint_pos"]
+    sign = mapping.joint_sign.astype(q.dtype)
+    ref = mapping.joint_reference.astype(q.dtype)
+    pos = reflect_polar(motion["body_pos_w"][:, bp])
+    pos[..., 1] += np.asarray(2*plane_y, dtype=pos.dtype)
+    mirrored = {
+        "fps": np.array(motion["fps"], copy=True),
+        "joint_pos": (q[:, jp]-ref[jp])*sign+ref,
+        "joint_vel": motion["joint_vel"][:, jp]*mapping.joint_sign.astype(motion["joint_vel"].dtype),
+        "body_pos_w": pos,
+        "body_quat_w": reflect_quaternion_wxyz(motion["body_quat_w"][:, bp]),
+        "body_lin_vel_w": reflect_polar(motion["body_lin_vel_w"][:, bp]),
+        "body_ang_vel_w": reflect_axial(motion["body_ang_vel_w"][:, bp]),
+    }
+    validate_motion(mirrored, mapping)
+    return mirrored
+
+
+def turn_statistics(motions: list[dict[str, np.ndarray]], threshold: float = .1) -> dict:
+    """Frame/duration statistics on pelvis world yaw angular velocity, rad/s."""
+    if threshold < 0 or not np.isfinite(threshold):
+        raise ValueError("Turn threshold must be finite and nonnegative")
+    left = right = neutral = frames = 0
+    duration = yaw_integral = left_seconds = right_seconds = 0.
+    for motion in motions:
+        wz = np.asarray(motion["body_ang_vel_w"][:, 0, 2], dtype=np.float64)
+        fps = float(np.asarray(motion["fps"]).reshape(-1)[0])
+        nleft, nright = int((wz > threshold).sum()), int((wz < -threshold).sum())
+        left += nleft; right += nright; neutral += len(wz)-nleft-nright; frames += len(wz)
+        duration += len(wz)/fps; yaw_integral += float(wz.sum())/fps
+        left_seconds += nleft/fps; right_seconds += nright/fps
+    return {"clips": len(motions), "frames": frames, "duration_seconds": duration,
+            "positive_yaw_frames": left, "negative_yaw_frames": right, "neutral_yaw_frames": neutral,
+            "positive_yaw_seconds": left_seconds, "negative_yaw_seconds": right_seconds,
+            "yaw_angular_velocity_integral_rad": yaw_integral,
+            "mean_yaw_angular_velocity_rad_s": yaw_integral/duration if duration else 0.,
+            "threshold_rad_s": threshold,
+            "definition": "Pelvis world angular velocity z; +yaw is left/CCW on upright z-up walking. Not a path-planning success metric."}

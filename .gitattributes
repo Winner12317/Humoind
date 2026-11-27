@@ -1,0 +1,9 @@
+policy/ppo_amp/*.pt filter=lfs diff=lfs merge=lfs -text
+pm01_sim2sim/results/*.mp4 filter=lfs diff=lfs merge=lfs -text
+policy/wamp/*.pt filter=lfs diff=lfs merge=lfs -text
+policy/sensorwm/*.pt filter=lfs diff=lfs merge=lfs -text
+G1_Perceptive_WMAC/logs/**/*.pt filter=lfs diff=lfs merge=lfs -text
+pm01_retarget/hhtools_presets/pm01/meshes/*.dae filter=lfs diff=lfs merge=lfs -text
+SuperAMP/logs/**/*.pt filter=lfs diff=lfs merge=lfs -text
+SuperAMP/results/**/*.pt filter=lfs diff=lfs merge=lfs -text
+pm01_retarget/qa/videos/*.mp4 filter=lfs diff=lfs merge=lfs -text

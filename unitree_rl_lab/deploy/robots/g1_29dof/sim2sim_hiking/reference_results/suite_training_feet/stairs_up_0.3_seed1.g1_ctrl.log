@@ -1,0 +1,26 @@
+1795686339.408536 [0]    g1_ctrl: selected interface "lo" is not multicast-capable: disabling multicast
+ --- Unitree Robotics --- 
+     G1-29dof Controller 
+[2026-11-26 01:45:39.710] [info] Waiting for connection to robot...
+[2026-11-26 01:45:39.910] [info] Connected to robot.
+[2026-11-26 01:45:40.010] [info] Initializing State_Passive ...
+[2026-11-26 01:45:40.010] [info] Initializing State_FixStand ...
+[2026-11-26 01:45:40.010] [info] Initializing State_Velocity ...
+[2026-11-26 01:45:40.010] [info] Policy directory: unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/v0
+[2026-11-26 01:45:40.024] [info] Initializing State_HikingStand ...
+[2026-11-26 01:45:40.024] [info] Initializing State_Hiking ...
+[2026-11-26 01:45:40.024] [info] Policy directory: unitree_rl_lab/deploy/robots/g1_29dof/config/policy/hiking/sensor_transform
+[2026-11-26 01:45:40.026] [info] hiking_depth_ring: subscribed to rt/hiking/depth
+[2026-11-26 01:45:40.026] [warning] hiking_depth_ring: no depth image on rt/hiking/depth yet; the policy sees no terrain
+[2026-11-26 01:45:40.036] [info] Initializing State_Mimic_Dance_102 ...
+[2026-11-26 01:45:40.036] [info] Policy directory: unitree_rl_lab/deploy/robots/g1_29dof/config/policy/mimic/dance_102/
+[2026-11-26 01:45:40.041] [info] Loaded motion file 'G1_Take_102.bvh_60hz' with duration 29.15s
+[2026-11-26 01:45:40.044] [info] Initializing State_Mimic_Gangnam_Style ...
+[2026-11-26 01:45:40.044] [info] Policy directory: unitree_rl_lab/deploy/robots/g1_29dof/config/policy/mimic/gangnam_style/
+[2026-11-26 01:45:40.045] [info] hiking_depth_ring: first depth image received on rt/hiking/depth
+[2026-11-26 01:45:40.049] [info] Loaded motion file 'G1_gangnam_style_V01.bvh_60hz' with duration 32.37s
+[2026-11-26 01:45:40.052] [info] FSM: Start Passive
+Press [L2 + Up] to enter FixStand mode.
+And then press [R1 + X] to start controlling the robot.
+[2026-11-26 01:45:41.455] [info] FSM: Change state from Passive to HikingStand
+[2026-11-26 01:45:45.455] [info] FSM: Change state from HikingStand to Hiking

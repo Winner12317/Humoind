@@ -1,0 +1,160 @@
+{
+  "repository": "/home/yao/Humoind project/G1_Perceptive_WMAC",
+  "commit": "6c7a2947fccc973e4af8e6d90e550400f1b6fcfc",
+  "branch": "",
+  "status": "M .gitignore\n M README.md\n M README_zh.md\n M rsl_rl/algorithms/amp_ppo.py\n M rsl_rl/runners/amp_on_policy_runner.py\n M rsl_rl/utils/motion_loader.py\n M setup.py\n M src/tasks/amp_loco/config/g1/__init__.py\n M src/tasks/amp_loco/config/g1/env_cfgs.py\n M src/tasks/amp_loco/config/g1/rl_cfg.py\n M src/tasks/amp_loco/mdp/observations.py\n M src/tasks/amp_loco/mdp/rewards.py\n M src/tasks/amp_loco/rl/runner.py\n?? .bootstrap/\n?? .conda-reproduce\n?? THIRD_PARTY_NOTICES.md\n?? licenses/\n?? reproduce/\n?? scripts/activate_env.sh\n?? scripts/analyze_amp_recovery_style.py\n?? scripts/analyze_wmac_perceptive_speed.py\n?? scripts/audit_wmac_model_assumptions.py\n?? scripts/audit_wmac_motion_data.py\n?? scripts/benchmark_wmac.py\n?? scripts/check_wmac_perceptive_training.py\n?? scripts/check_wmac_physics.py\n?? scripts/compare_amp_learning_efficiency.py\n?? scripts/compare_amp_parameters.py\n?? scripts/compare_wmac_moe.py\n?? scripts/compare_wmac_ppo.py\n?? scripts/compare_wmac_recovery_fixes.py\n?? scripts/diagnose_wmac.py\n?? scripts/evaluate_wmac.py\n?? scripts/evaluate_wmac_perceptive.py\n?? scripts/evaluate_wmac_zero_start.py\n?? scripts/fix_mujoco_warp_hfield.py\n?? scripts/measure_perceptive_sim_capacity.py\n?? scripts/plan_wmac_moe.py\n?? scripts/play_wmac.py\n?? scripts/play_wmac_perceptive.py\n?? scripts/prepare_mirrored_motions.py\n?? scripts/probe_wmac_physical_directions.py\n?? scripts/probe_wmac_recorded_phases.py\n?? scripts/profile_wmac_perceptive.py\n?? scripts/restore_framework_from_doc.py\n?? scripts/run_wmac_ablations.py\n?? scripts/summarize_wmac_ppo_comparison.py\n?? scripts/train_wmac.py\n?? scripts/train_wmac_perceptive.py\n?? src/amp_features.py\n?? src/assets/cameras/\n?? src/assets/motions/g1/hiking_official/\n?? src/assets/motions/g1/standing_legacy/\n?? src/assets/robots/unitree_g1/g1_29dof_torsobase_popsicle.urdf\n?? src/assets/robots/unitree_g1/hiking_head_link.STL\n?? src/recovery_rewards.py\n?? src/tasks/amp_perceptive/\n?? src/training_cost.py\n?? src/wmac/\n?? src/wmac_perceptive/\n?? tests/\n?? \"\\346\\234\\254\\346\\234\\272\\345\\244\\215\\347\\216\\260.md\"",
+  "paper": "https://arxiv.org/abs/2601.07718",
+  "reference_commit": "de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057",
+  "isolated_from": "/home/autel/AMP_mjlab_wmac",
+  "scope": "Perceptive WMAC; config.motion_scope distinguishes forward walking/turning from historical joint training",
+  "explicit_differences": [
+    "SuperMimic GenCoord BPTT and InstinctMJ latent objective retained instead of Hiking PPO",
+    "MuJoCo heightfield/box collision solver differs from PhysX slope-threshold triangle meshes",
+    "MuJoCo has a single sliding-friction coefficient; source dynamic friction is applied, static/restitution draws are diagnostic only",
+    "PhysX joint solver velocity limit has no direct MuJoCo equivalent; source soft velocity-limit reward retained",
+    "Local G1 MJCF pelvis free root retained; task quantities transformed to the Hiking torso frame",
+    "13 supervised physics auxiliary outputs cover contacts, torque costs, acceleration and substep timers; GenCoord physical branch remains35 velocity deltas",
+    "Measured G1 depth intrinsics at the nominal Hiking torso mount"
+  ],
+  "visual_mode": "instinct_latent_v1",
+  "execution_profile": "supermimic",
+  "motion_data_protocol": "hiking_walk_v1",
+  "locomotion_objective": "hiking_full_v1",
+  "standing_expert_source": "none",
+  "motion_reference": {
+    "source": "complete_official_hiking_plus_historical_local_walk_turn",
+    "source_frames": 18982,
+    "loaded_frames": 18981,
+    "frame_content_filter": null,
+    "height_normalization": null,
+    "symmetry": "sagittal_mirror",
+    "real_reset": "independent_default_standing_pose",
+    "amp": "67_features_x_10_frames_term_major_no_running_normalizer",
+    "upstream_instinct_rl_reference": "574c8d50",
+    "discriminator_update_budget": "Hiking_24_fresh_vector_steps_x_5_epochs_x_4_logical_minibatches;weighted_execution_microbatches;all_environments",
+    "source_files_sha256": {
+      "parkour_motion_without_run_retargetted.npz": "7cfb7c1dcaa6f2a55a13c4849be9e17b4c960ce4015c500ac0ddfb9d77f4ba5b",
+      "parkour_motion_without_run.yaml": "f79e5bbc9207976e1610459ab3727a9e1da6d5c0c6cc75793dcec34b81cb7679",
+      "README.md": "ef5f61f763d5fa16f4a6f9598086b5ed624863a8f6ee151ef2439af13efb51ce"
+    },
+    "expert_sampling": "uniform valid ten-frame windows across all official and legacy walking clips; shared across terrains",
+    "legacy_walking_reference": {
+      "source": "pre_hiking_local_walk_turn_v2",
+      "historical_local_protocol_commit": "44bd98ba"
+    }
+  },
+  "hiking_training_version": 3,
+  "execution_reference": {
+    "repository": "https://github.com/HybridRobotics/supermimic",
+    "commit": "abc124c1bd5976341034668af3d12c087f2f1f55",
+    "scope": "training scale, compiled tensor kernels and optional complete CUDA updates",
+    "optimizer": "muon_adam",
+    "optimizer_implementation": "PyTorch 2.10 Muon math adapted to installed PyTorch 2.7",
+    "replay_storage": "frame_uint8",
+    "iteration_unit": "one vector environment control step",
+    "checkpoint_interval_unit": "learner updates"
+  },
+  "visual_reference": {
+    "repository": "https://github.com/project-instinct/InstinctMJ",
+    "branch": "supermimic",
+    "commit": "03563ee02665f327425106372264070315673748",
+    "scope": "joint-stack latent residual prediction, online reconstruction and visual stop-gradients"
+  },
+  "sensor_protocol": "g1_hiking_calibrated_v1",
+  "camera_reference": {
+    "protocol": "g1_hiking_calibrated_v1",
+    "reference_commit": "de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057",
+    "image_shape": [
+      36,
+      64
+    ],
+    "fov_degrees": [
+      88.92490338849896,
+      58.11279497342982
+    ],
+    "frame": "torso_link",
+    "position": [
+      0.0487988662332928,
+      0.01,
+      0.4378029937970051
+    ],
+    "rotation_wxyz": [
+      0.9135367613482678,
+      0.004363309284746571,
+      0.4067366430758002,
+      0.0
+    ],
+    "coordinate_convention": "world_camera_x_forward_y_left_z_up",
+    "projection": "distance_to_image_plane",
+    "include_geom_groups": [
+      0,
+      2
+    ],
+    "update_period_s": 0.02,
+    "raw_depth_scale_m": 2.5,
+    "pixel_sampling": "RealSense_integer_pixel_centres_with_half_pixel_resize",
+    "alignment": "full_body_pose",
+    "min_ray_distance": 0.1,
+    "max_ray_distance": 2000000.0,
+    "missing_depth_m": 1000000.0,
+    "minimum_distance_rule": "per_geometry_hit_filter",
+    "preprocess_order": [
+      "crop",
+      "gaussian_blur",
+      "clip_0_2.5",
+      "divide_2.5"
+    ],
+    "exclude_parent_body": false,
+    "backend": "MuJoCo Warp BVH over local terrain and robot visual geometry",
+    "calibration": {
+      "width": 848,
+      "height": 480,
+      "fx": 431.9433288574219,
+      "fy": 431.9433288574219,
+      "cx": 432.1478576660156,
+      "cy": 235.75416564941406,
+      "fps": 30,
+      "depth_scale_m_per_raw_unit": 0.0010000000474974513,
+      "distortion_model": "Brown Conrady",
+      "distortion_coefficients": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "source_report_sha256": "712c48441b847bf01eafb02cba55b4084520b8ac4142972c0044028cf3368ec6"
+    },
+    "ray_intrinsics": {
+      "width": 64,
+      "height": 36,
+      "fx": 32.599496517541276,
+      "fy": 32.39574966430664,
+      "cx": 32.15266850309552,
+      "cy": 17.219062423706053,
+      "fps": 30,
+      "depth_scale_m_per_raw_unit": 0.0010000000474974513,
+      "distortion_model": "Brown Conrady",
+      "distortion_coefficients": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "source_report_sha256": "712c48441b847bf01eafb02cba55b4084520b8ac4142972c0044028cf3368ec6"
+    },
+    "capture_hz": 50.0,
+    "hardware_stream_hz": 30,
+    "delay_policy_steps": 1,
+    "mounting_calibrated": false
+  },
+  "depth_capture": "Fresh post-sense successor; pre-reset terminal view captured separately; configured one-step delay only",
+  "proprioception": "8 samples per term in source term-major layout, 768 total, torso frame, gyro*.25 and joint velocity*.05",
+  "hiking_task": "G1ParkourRoughEnvCfg",
+  "robot_variant": "upstream_unshod_G1",
+  "robot_asset_sha256": {
+    "g1_29dof_torsobase_popsicle.urdf": "5e99d930af64f3f0bfd34235239e288cc380ba62c8b01fcfcf8cc9f0996e7fa4",
+    "hiking_head_link.STL": "d297328b3569fc85074355e76cba6c889d19de5361224bcd3c5b8ce82e13b9b6"
+  }
+}

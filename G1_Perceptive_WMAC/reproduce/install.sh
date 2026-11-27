@@ -62,11 +62,9 @@ print('Python:',sys.version)
 print('Torch:',torch.__version__,'GPU:',torch.cuda.get_device_name())
 print('Local AMP rsl_rl:',rsl_rl.__file__)
 PY
-# Source preparation is offline: verify/copy the exact official raw walking
-# release (the version 4 default reference) and reconstruct the 13 historical
-# local walking clips from public-base NPZ assets for the optional version 3
-# 28-clip pool. This also writes reproduce/reference-config.json. Historical
-# standing data remains included for explicitly selected legacy protocols.
+# Acquire the pinned Hiking reference from its author or use the local source
+# described in QUICKSTART.md. All subsequent motion checks run offline.
+"$amp_python" scripts/prepare_mirrored_motions.py
 "$amp_python" reproduce/verify-offline-inputs.py
 # CPU contract checks include the current URDF/head assets, attention readout,
 # vector-step clock, sensor capture and execution reuse. No long training.

@@ -75,13 +75,7 @@ attribution is separate from the InstinctMJ latent files' MIT attribution above.
 The source interpolation is ported to PyTorch with the author's exclusive
 timeline, while torso-root reference poses are converted to the local
 pelvis-root robot model. Fresh walking experiments retain the full official
-reference rather than the historical local frame filter. The published source
-now includes three byte-for-byte original files from the official public
-Data & Model package under `src/assets/motions/g1/hiking_official/`: the complete
-walking reference NPZ, its selection YAML and the upstream README. Their source
-archive digest, original member paths and file hashes are recorded in that
-directory's `SOURCE_MANIFEST.json`; `NOTICE.txt` describes the bundle. Author
-policy checkpoints from the archive and generated caches are not bundled.
+reference rather than the historical local frame filter. Training uses the author-provided walking NPZ obtained directly from Hiking's Data & Model package. The project includes its selection YAML, source README and pinned SHA-256 checksums in src/assets/motions/g1/hiking_official/. The [quick start](reproduce/QUICKSTART.md) covers local source preparation.
 The public package contains no separate data-license text. The InstinctLab
 code license above is not asserted as the license of these data files; this
 attribution preserves provenance and does not assign additional data rights.

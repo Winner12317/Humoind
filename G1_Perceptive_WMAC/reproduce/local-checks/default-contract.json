@@ -1,0 +1,28 @@
+{
+  "defaults": {
+    "task": "Unitree-G1-AMP-Perceptive-Hiking",
+    "hiking_training_version": 3,
+    "sensor_protocol": "g1_hiking_calibrated_v1",
+    "walking_expert_source": "pre_hiking_local_walk_turn_v2",
+    "standing_expert_source": "none",
+    "visual_mode": "instinct_latent_v1",
+    "locomotion_objective": "hiking_full_v1",
+    "actor_type": "moe",
+    "action_limit": null,
+    "validation_env_fraction": 0.0,
+    "wm_window": 7,
+    "imagination_horizon": 32,
+    "iterations": 1000000,
+    "execution_optimizer": "muon_adam",
+    "num_envs": 4096
+  },
+  "paths": {
+    "python": "/home/yao/.local/share/g1-perceptive-wmac/env/bin/python",
+    "rsl_rl": "/home/yao/Humoind project/G1_Perceptive_WMAC/rsl_rl/__init__.py",
+    "wmac_perceptive": "/home/yao/Humoind project/G1_Perceptive_WMAC/src/wmac_perceptive/__init__.py",
+    "torch": "/home/yao/.local/share/g1-perceptive-wmac/env/lib/python3.11/site-packages/torch/__init__.py"
+  },
+  "rsl_rl_distribution": "5.0.1",
+  "torch": "2.7.0+cu126",
+  "cuda_device": "NVIDIA GeForce RTX 4080"
+}

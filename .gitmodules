@@ -1,3 +1,9 @@
 [submodule "Human-Humanoid-Tools"]
 	path = Human-Humanoid-Tools
 	url = https://github.com/Roboparty/Human-Humanoid-Tools.git
+[submodule "engineai_rl_lab"]
+	path = engineai_rl_lab
+	url = https://github.com/engineai-robotics/engineai_rl_lab.git
+[submodule "unitree_mujoco"]
+	path = unitree_mujoco
+	url = https://github.com/unitreerobotics/unitree_mujoco.git

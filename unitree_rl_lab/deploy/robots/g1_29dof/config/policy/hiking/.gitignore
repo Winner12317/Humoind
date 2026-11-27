@@ -1,0 +1,2 @@
+# Camera definitions belong to each exported policy (the repository ignores *.npz)
+!*/params/depth_camera.npz

@@ -18,7 +18,8 @@
       "archive_member": "data&model/parkour_motion_reference/parkour_motion_without_run_retargetted.npz",
       "bytes": 2737714,
       "sha256": "7cfb7c1dcaa6f2a55a13c4849be9e17b4c960ce4015c500ac0ddfb9d77f4ba5b",
-      "modified": false
+      "modified": false,
+      "included_in_repository": false
     },
     "parkour_motion_without_run.yaml": {
       "archive_member": "data&model/parkour_motion_reference/parkour_motion_without_run.yaml",
@@ -33,7 +34,7 @@
       "modified": false
     }
   },
-  "provenance": "Original members of the fixed author-provided public Data & Model package, copied without modification.",
+  "provenance": "The manifest identifies the exact author-provided Data & Model package members used at training time. The original motion NPZ is acquired from the authors or supplied locally.",
   "excluded": "Author checkpoints and generated or mirrored MuJoCo caches are not included.",
   "data_license_note": "The public package contains no separate data-license text. This manifest does not assign a data license or infer it from the code license. Copyright and other rights remain with upstream rights holders."
 }

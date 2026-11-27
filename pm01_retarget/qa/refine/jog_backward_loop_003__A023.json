@@ -1,0 +1,85 @@
+{
+ "clip": "jog_backward_loop_003__A023",
+ "group": "WalkandRun",
+ "frames": 683,
+ "fps": 120.0,
+ "soft_range": {
+  "J16_ELBOW_PITCH_L": {
+   "frames_within_0.01rad_of_limit_before": 0,
+   "smallest_margin_before_rad": 0.790997,
+   "smallest_margin_after_rad": 0.790997,
+   "largest_change_deg": 0.0
+  },
+  "J21_ELBOW_PITCH_R": {
+   "frames_within_0.01rad_of_limit_before": 0,
+   "smallest_margin_before_rad": 0.9054340000000001,
+   "smallest_margin_after_rad": 0.9054340000000001,
+   "largest_change_deg": 0.0
+  }
+ },
+ "root_height": {
+  "pelvis_offset_from_scaled_g1_m": 0.012228609501361398,
+  "frames_resting_on_body": 0,
+  "min_m": -0.04276168333430498,
+  "max_m": -0.010718421037135824
+ },
+ "feet": {
+  "foot_clearance_min_before_m": 0.08853944901154293,
+  "frames_feet_closer_than_gap_before": 0,
+  "frames_swing_foot_lifted_over_other": 0,
+  "foot_clearance_min_after_m": 0.09015127467680875,
+  "frames_feet_closer_than_gap_after": 0,
+  "separation_passes": 0,
+  "frames_with_separation_constraint": 0,
+  "no_slip_frames": {
+   "L": 292,
+   "R": 323
+  },
+  "flattened": {
+   "L": {
+    "frames_flattened": 311,
+    "largest_tilt_reduction_deg": 23.471944766251525
+   },
+   "R": {
+    "frames_flattened": 282,
+    "largest_tilt_reduction_deg": 14.250841475375418
+   }
+  },
+  "largest_horizontal_correction_m": 0.009890287017993818,
+  "largest_height_correction_m": 0.03351853803477195,
+  "foot_clearance_min_final_m": 0.09015133322867175,
+  "frames_feet_closer_than_gap_final": 0,
+  "frames_feet_overlapping_final": 0,
+  "lowest_sole_final_m": -6.1668110964974154e-09,
+  "stance_slip_at_contact_point_m_s": {
+   "g1": 0.019085554964310577,
+   "hhtools": 0.029686133804445427,
+   "refined": 9.82916480052046e-06
+  }
+ },
+ "legs": {
+  "worst_grounded_foot_position_error_m": 1.833047571109172e-05,
+  "worst_foot_rotation_error_deg": 0.26861526733038255,
+  "largest_pelvis_drop_for_reach_m": 0.011738591988103687,
+  "largest_joint_change_deg": 23.554566829564155,
+  "mean_joint_change_deg": 1.2618895223921685
+ },
+ "arms": {
+  "frames_adjusted": 0,
+  "frames_penetrating_before": 0,
+  "frames_penetrating_after": 0,
+  "deepest_before_m": 0.0,
+  "deepest_after_m": 0.0,
+  "largest_joint_change_deg": 0.0
+ },
+ "joint_speed": {
+  "max_rad_s": 15.049116743277853,
+  "max_over_actuator_limit": 0.5722097621018195,
+  "hhtools_max_over_actuator_limit": 0.6823939163498101
+ },
+ "joint_accel_p99_rad_s2": {
+  "hhtools": 249.56092799999956,
+  "refined": 277.874342110371,
+  "g1": 220.77907200000024
+ }
+}

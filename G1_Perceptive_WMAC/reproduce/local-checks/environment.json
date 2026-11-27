@@ -1,0 +1,28 @@
+{
+  "prefix": "/home/yao/.local/share/g1-perceptive-wmac/env",
+  "miniforge_installer_sha256": "65af53dad30b3fcbd1cb1d4ad62fd3a86221464754844544558aae3a28795189",
+  "python": "3.11.17",
+  "conda_packages_matching_md5": 26,
+  "python_distributions_matching_versions": 138,
+  "pip_check": "No broken requirements found.",
+  "torch": "2.7.0+cu126",
+  "torchvision": "0.22.0+cu126",
+  "torch_cuda": "12.6",
+  "gpu": "NVIDIA GeForce RTX 4080",
+  "cuda_tensor_result": 6.0,
+  "rsl_rl": "/home/yao/Humoind project/G1_Perceptive_WMAC/rsl_rl/__init__.py",
+  "wmac": "/home/yao/Humoind project/G1_Perceptive_WMAC/src/wmac_perceptive/__init__.py",
+  "mjlab": "/home/yao/.local/share/g1-perceptive-wmac/env/lib/python3.11/site-packages/mjlab/__init__.py",
+  "observation_patch_sha256": "7d0060915b3b8ccef48a0f272117e775789a1eae336f90c013ba50c3eca24162",
+  "hfield": {
+    "status": "needs_patch",
+    "action": "check",
+    "version": "3.8.1",
+    "path": "/home/yao/.local/share/g1-perceptive-wmac/env/lib/python3.11/site-packages/mujoco_warp/_src/collision_convex.py",
+    "backup": "/home/yao/.local/share/g1-perceptive-wmac/env/lib/python3.11/site-packages/mujoco_warp/_src/collision_convex.py.before_hfield_0571f672_1932c52be686.bak",
+    "source_sha256": "1932c52be6867bed6ae3265ae683102f54099ae278ea93c3dcd25ff1f5e9c8bf",
+    "write_contact_module_sha256": "3c12b154998af28e257ff80437ca4250546947a6b3bf2af7fa3f1210fdff7d74",
+    "changed": false,
+    "upstream_commit": "0571f6721752f4eb3f5c2da3d4ecce8307a733cd"
+  }
+}

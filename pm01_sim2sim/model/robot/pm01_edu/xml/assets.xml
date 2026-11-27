@@ -1,0 +1,56 @@
+<mujoco model="assets">
+    <!-- Replaces EngineAI's assets.xml (engineai_robotics_native_sdk 6065bb2). The official file maps
+         each link to a textured OBJ mesh (~300 MB with textures); here the same meshes are
+         vertex-clustered STL copies (made by SuperAMP/scripts/pm01/build_pm01_mjcf.py) and the
+         textures are plain colours. Meshes and materials are visual only: nothing that
+         collides or carries mass is defined in this file. -->
+    <material name="LINK_ANKLE_ROLL_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_ANKLE_ROLL_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_BASE" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_ELBOW_PITCH_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_ELBOW_PITCH_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_ELBOW_YAW_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_ELBOW_YAW_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HEAD_YAW" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HIP_PITCH_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HIP_PITCH_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HIP_ROLL_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HIP_ROLL_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HIP_YAW_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_HIP_YAW_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_KNEE_PITCH_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_KNEE_PITCH_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_SHOULDER_PITCH_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_SHOULDER_PITCH_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_SHOULDER_ROLL_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_SHOULDER_ROLL_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_SHOULDER_YAW_L" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_SHOULDER_YAW_R" rgba="0.78 0.78 0.80 1"/>
+    <material name="LINK_TORSO_YAW" rgba="0.78 0.78 0.80 1"/>
+
+    <mesh name="LINK_ANKLE_PITCH_L" file="../meshes/LINK_ANKLE_PITCH_L.stl"/>
+    <mesh name="LINK_ANKLE_PITCH_R" file="../meshes/LINK_ANKLE_PITCH_R.stl"/>
+    <mesh name="LINK_ANKLE_ROLL_L" file="../meshes/LINK_ANKLE_ROLL_L.stl"/>
+    <mesh name="LINK_ANKLE_ROLL_R" file="../meshes/LINK_ANKLE_ROLL_R.stl"/>
+    <mesh name="LINK_BASE" file="../meshes/LINK_BASE.stl"/>
+    <mesh name="LINK_ELBOW_PITCH_L" file="../meshes/LINK_ELBOW_PITCH_L.stl"/>
+    <mesh name="LINK_ELBOW_PITCH_R" file="../meshes/LINK_ELBOW_PITCH_R.stl"/>
+    <mesh name="LINK_ELBOW_YAW_L" file="../meshes/LINK_ELBOW_YAW_L.stl"/>
+    <mesh name="LINK_ELBOW_YAW_R" file="../meshes/LINK_ELBOW_YAW_R.stl"/>
+    <mesh name="LINK_HEAD_YAW" file="../meshes/LINK_HEAD_YAW.stl"/>
+    <mesh name="LINK_HIP_PITCH_L" file="../meshes/LINK_HIP_PITCH_L.stl"/>
+    <mesh name="LINK_HIP_PITCH_R" file="../meshes/LINK_HIP_PITCH_R.stl"/>
+    <mesh name="LINK_HIP_ROLL_L" file="../meshes/LINK_HIP_ROLL_L.stl"/>
+    <mesh name="LINK_HIP_ROLL_R" file="../meshes/LINK_HIP_ROLL_R.stl"/>
+    <mesh name="LINK_HIP_YAW_L" file="../meshes/LINK_HIP_YAW_L.stl"/>
+    <mesh name="LINK_HIP_YAW_R" file="../meshes/LINK_HIP_YAW_R.stl"/>
+    <mesh name="LINK_KNEE_PITCH_L" file="../meshes/LINK_KNEE_PITCH_L.stl"/>
+    <mesh name="LINK_KNEE_PITCH_R" file="../meshes/LINK_KNEE_PITCH_R.stl"/>
+    <mesh name="LINK_SHOULDER_PITCH_L" file="../meshes/LINK_SHOULDER_PITCH_L.stl"/>
+    <mesh name="LINK_SHOULDER_PITCH_R" file="../meshes/LINK_SHOULDER_PITCH_R.stl"/>
+    <mesh name="LINK_SHOULDER_ROLL_L" file="../meshes/LINK_SHOULDER_ROLL_L.stl"/>
+    <mesh name="LINK_SHOULDER_ROLL_R" file="../meshes/LINK_SHOULDER_ROLL_R.stl"/>
+    <mesh name="LINK_SHOULDER_YAW_L" file="../meshes/LINK_SHOULDER_YAW_L.stl"/>
+    <mesh name="LINK_SHOULDER_YAW_R" file="../meshes/LINK_SHOULDER_YAW_R.stl"/>
+    <mesh name="LINK_TORSO_YAW" file="../meshes/LINK_TORSO_YAW.stl"/>
+</mujoco>

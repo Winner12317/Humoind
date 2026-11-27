@@ -132,8 +132,10 @@ class HikingBundledSourceTest(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 source.verify_hiking_source_files(bundle)
 
-    def test_checked_in_bundle_has_pinned_bytes_and_full_official_motion(self):
-        bundle = source.HIKING_BUNDLED_SOURCE
+    def test_installed_reference_has_pinned_bytes_and_full_official_motion(self):
+        bundle = source.DEFAULT_HIKING_SOURCE
+        if not (bundle/MOTION).is_file():
+            self.skipTest("Install the author-provided Hiking reference to run the full asset check")
         self.assertEqual(source.verify_hiking_source_files(bundle), bundle/MOTION)
         self.assertEqual(set(source.HIKING_SOURCE_SHA256), {MOTION, SELECTION, README})
         self.assertEqual(hashlib.sha256((bundle/MOTION).read_bytes()).hexdigest(),

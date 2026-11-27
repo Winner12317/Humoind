@@ -1,0 +1,4 @@
+# Test outputs
+results/
+# Terrain tiles are inputs (the repository ignores *.npz for mimic data)
+!terrains/*.npz

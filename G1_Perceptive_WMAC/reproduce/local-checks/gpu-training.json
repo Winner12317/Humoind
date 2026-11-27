@@ -1,0 +1,59 @@
+{
+  "checkpoint": "logs/wmac_perceptive/2026-11-25_19-33-28_244897_seed42_repro_v3_gpu_smoke/model_24.pt",
+  "training_completed": true,
+  "architecture_version": 9,
+  "hiking_training_version": 3,
+  "num_envs": 16,
+  "vector_steps": 200,
+  "actual_transitions": 3200,
+  "imagined_transitions": 12288,
+  "learner_updates": 24,
+  "optimizer_steps_from_checkpoint": {
+    "opt_model": 24,
+    "opt_actor": 24,
+    "opt_critic": 480,
+    "opt_disc": 160
+  },
+  "training_gates": {
+    "actor_updates_accepted": 24,
+    "actor_updates_rejected": 0,
+    "_active_horizon": 32,
+    "_last_actor_update_iteration": 24,
+    "_progress_start_iteration": 0,
+    "_last_stall_warning_iteration": null
+  },
+  "amp_totals": {
+    "discriminator_updates_applied": 160,
+    "amp_rollout_blocks": 8,
+    "amp_policy_windows": 3072,
+    "amp_policy_exposures": 15360,
+    "amp_invalid_windows_dropped": 0
+  },
+  "gradient_norms": {
+    "wm_grad_norm": {
+      "min_positive": 2620.454345703125,
+      "max": 615615.5625,
+      "nonzero_rows": 24
+    },
+    "actor_grad_norm": {
+      "min_positive": 0.16920524835586548,
+      "max": 0.9435874819755554,
+      "nonzero_rows": 24
+    },
+    "critic_grad_norm": {
+      "min_positive": 1.5648082494735718,
+      "max": 7.631471157073975,
+      "nonzero_rows": 24
+    },
+    "discriminator_grad_norm": {
+      "min_positive": 0.2962321639060974,
+      "max": 0.8591427803039551,
+      "nonzero_rows": 22
+    }
+  },
+  "last_logged_vector_step": 193,
+  "compile": false,
+  "cuda_graphs": false,
+  "hfield_overflow_log_occurrences": 222,
+  "wall_seconds": 127.79168577102246
+}

@@ -1,0 +1,13 @@
+Obtaining file:///home/yao/Humoind%20project/G1_Perceptive_WMAC
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: wbc_mjlab
+  Building editable for wbc_mjlab (pyproject.toml): started
+  Building editable for wbc_mjlab (pyproject.toml): finished with status 'done'
+  Created wheel for wbc_mjlab: filename=wbc_mjlab-0.0.1-0.editable-py3-none-any.whl size=2740 sha256=8db2733b15aee42dfee834ee69b9f643f36387e7926a46688e4d8b2786ab8e3e
+  Stored in directory: /tmp/pip-ephem-wheel-cache-ddeiy2re/wheels/c8/36/a4/e6e5fac7ec5e259227a781fadbf13dfdd24e827e63c520012f
+Successfully built wbc_mjlab
+Installing collected packages: wbc_mjlab
+Successfully installed wbc_mjlab-0.0.1

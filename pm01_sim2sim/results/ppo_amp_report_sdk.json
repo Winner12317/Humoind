@@ -1,0 +1,347 @@
+{
+  "dynamics": "sdk",
+  "physics_dt": 0.002,
+  "policy": {
+    "checkpoint": "policy/ppo_amp/model_60000.pt",
+    "checkpoint_sha256": "07259d2f3cd196108c16aebeb39180933d3cbae5b50ab9d9a04f0e80f1dd8e25",
+    "checkpoint_format": "superamp-rsl_rl-amp-runner",
+    "loaded_as": "ppo-amp-baseline",
+    "iteration": 60000,
+    "task": "EngineAI-PM01-AMP-Flat",
+    "run_name": null,
+    "trained_by": "SuperAMP PPO + AMP (rsl_rl AMP runner)",
+    "amp_feature_schema": "legacy",
+    "onnx_sha256": "f7ce775e4e8809fd5dcca06aa669fbeaadada0abaacf0bf06b8fa7f5fe3259fa",
+    "onnx_max_abs_error_vs_torch": 3.0517578125e-05,
+    "rsl_rl_rebuild_max_abs_error": 0.0
+  },
+  "walk": {
+    "segments": [
+      {
+        "segment": "stand",
+        "command": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          -0.0,
+          -0.001,
+          0.001
+        ],
+        "abs_error_mean": [
+          0.009,
+          0.001,
+          0.002
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "forward 0.5",
+        "command": [
+          0.5,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          0.059,
+          -0.003,
+          -0.019
+        ],
+        "abs_error_mean": [
+          0.441,
+          0.034,
+          0.053
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "forward 1.0",
+        "command": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          0.925,
+          0.047,
+          0.082
+        ],
+        "abs_error_mean": [
+          0.111,
+          0.119,
+          0.173
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "forward 1.5",
+        "command": [
+          1.5,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          1.322,
+          0.005,
+          0.142
+        ],
+        "abs_error_mean": [
+          0.2,
+          0.111,
+          0.235
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "stop",
+        "command": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          0.02,
+          0.008,
+          -0.014
+        ],
+        "abs_error_mean": [
+          0.036,
+          0.009,
+          0.014
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "backward 0.5",
+        "command": [
+          -0.5,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          -0.243,
+          -0.015,
+          -0.029
+        ],
+        "abs_error_mean": [
+          0.257,
+          0.081,
+          0.12
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "left 0.4",
+        "command": [
+          0.0,
+          0.4,
+          0.0
+        ],
+        "measured_mean": [
+          0.0,
+          -0.002,
+          -0.004
+        ],
+        "abs_error_mean": [
+          0.0,
+          0.402,
+          0.004
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "right 0.4",
+        "command": [
+          0.0,
+          -0.4,
+          0.0
+        ],
+        "measured_mean": [
+          -0.001,
+          0.005,
+          0.0
+        ],
+        "abs_error_mean": [
+          0.001,
+          0.405,
+          0.002
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "turn left 0.8",
+        "command": [
+          0.0,
+          0.0,
+          0.8
+        ],
+        "measured_mean": [
+          0.001,
+          0.006,
+          0.017
+        ],
+        "abs_error_mean": [
+          0.002,
+          0.006,
+          0.783
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "turn right 0.8",
+        "command": [
+          0.0,
+          0.0,
+          -0.8
+        ],
+        "measured_mean": [
+          -0.005,
+          0.001,
+          -0.016
+        ],
+        "abs_error_mean": [
+          0.005,
+          0.001,
+          0.784
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "arc 0.6 / 0.5",
+        "command": [
+          0.6,
+          0.0,
+          0.5
+        ],
+        "measured_mean": [
+          0.511,
+          0.04,
+          0.215
+        ],
+        "abs_error_mean": [
+          0.092,
+          0.136,
+          0.286
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      },
+      {
+        "segment": "stand",
+        "command": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "measured_mean": [
+          -0.029,
+          0.012,
+          0.007
+        ],
+        "abs_error_mean": [
+          0.035,
+          0.016,
+          0.015
+        ],
+        "fell": false,
+        "torque_limit_steps": 0.0
+      }
+    ],
+    "falls": 0
+  },
+  "recovery": {
+    "poses": [
+      {
+        "pose": 1,
+        "stood_up": true,
+        "seconds_to_stand": 0.82,
+        "peak_base_rise_m_s": 2.02,
+        "peak_joint_speed_rad_s": 17.9,
+        "upright_at_end": true
+      },
+      {
+        "pose": 2,
+        "stood_up": true,
+        "seconds_to_stand": 0.92,
+        "peak_base_rise_m_s": 2.35,
+        "peak_joint_speed_rad_s": 17.7,
+        "upright_at_end": true
+      },
+      {
+        "pose": 3,
+        "stood_up": true,
+        "seconds_to_stand": 0.88,
+        "peak_base_rise_m_s": 1.02,
+        "peak_joint_speed_rad_s": 22.5,
+        "upright_at_end": true
+      },
+      {
+        "pose": 4,
+        "stood_up": true,
+        "seconds_to_stand": 0.96,
+        "peak_base_rise_m_s": 2.07,
+        "peak_joint_speed_rad_s": 18.3,
+        "upright_at_end": true
+      },
+      {
+        "pose": 5,
+        "stood_up": true,
+        "seconds_to_stand": 1.32,
+        "peak_base_rise_m_s": 1.97,
+        "peak_joint_speed_rad_s": 16.3,
+        "upright_at_end": true
+      },
+      {
+        "pose": 6,
+        "stood_up": true,
+        "seconds_to_stand": 1.86,
+        "peak_base_rise_m_s": 1.82,
+        "peak_joint_speed_rad_s": 18.6,
+        "upright_at_end": true
+      },
+      {
+        "pose": 7,
+        "stood_up": true,
+        "seconds_to_stand": 0.62,
+        "peak_base_rise_m_s": 2.3,
+        "peak_joint_speed_rad_s": 17.1,
+        "upright_at_end": true
+      },
+      {
+        "pose": 8,
+        "stood_up": true,
+        "seconds_to_stand": 1.32,
+        "peak_base_rise_m_s": 2.24,
+        "peak_joint_speed_rad_s": 17.0,
+        "upright_at_end": true
+      }
+    ],
+    "success": 8,
+    "total": 8,
+    "tempo_until_standing": {
+      "peak_base_rise_m_s_mean": 1.97,
+      "peak_base_rise_m_s_max": 2.35,
+      "joint_speed_p95_rad_s": 7.5,
+      "joint_speed_max_rad_s": 22.5
+    },
+    "pose_source": "reference_motion"
+  },
+  "push": {
+    "pushes": 10,
+    "falls": 0,
+    "stood_up_again": 0,
+    "upright_at_end": true
+  },
+  "wall_seconds": 3.9
+}

@@ -45,3 +45,9 @@ src/tasks/uni_track
 
 # Isolated generated motion mirrors and terrain caches
 .perceptive_cache
+
+# Locally supplied motion data (see reproduce/QUICKSTART.md).
+/motion_data_csv/amp/*.csv
+/src/assets/motions/g1/amp/WalkandRun/*.npz
+/src/assets/motions/g1/amp/Recovery/*.npz
+/src/assets/motions/g1/hiking_official/parkour_motion_without_run_retargetted.npz

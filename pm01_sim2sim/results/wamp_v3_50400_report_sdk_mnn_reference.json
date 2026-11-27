@@ -1,0 +1,101 @@
+{
+  "dynamics": "sdk",
+  "physics_dt": 0.002,
+  "policy": {
+    "checkpoint": "policy/wamp/v3_50400.pt",
+    "checkpoint_sha256": "626488e7da5aaedf0e0048e03f03da072bb2d1ba3a89b6f34234f71f59ba51eb",
+    "checkpoint_format": "amp-wmac-v1",
+    "loaded_as": "amp-wmac-v1",
+    "iteration": 50400,
+    "task": "EngineAI-PM01-AMP-Flat-Aligned",
+    "run_name": "pm01_recovery_style1_scratch",
+    "trained_by": "SuperAMP WMAC (SuperMimic-style world model + AMP)",
+    "amp_feature_schema": "grounded_v2",
+    "onnx_sha256": "43407a441d83657e4bc053a478c6646b413cbf906bfd70bdd61b3f86bc9d6f99",
+    "onnx_max_abs_error_vs_torch": 5.245208740234375e-06,
+    "rsl_rl_rebuild_max_abs_error": null
+  },
+  "recovery": {
+    "pose_source": "reference_motion",
+    "poses": [
+      {
+        "pose": 1,
+        "stood_up": true,
+        "seconds_to_stand": 2.86,
+        "peak_base_rise_m_s": 0.97,
+        "peak_joint_speed_rad_s": 11.4,
+        "upright_at_end": true
+      },
+      {
+        "pose": 2,
+        "stood_up": true,
+        "seconds_to_stand": 3.08,
+        "peak_base_rise_m_s": 1.02,
+        "peak_joint_speed_rad_s": 13.6,
+        "upright_at_end": true
+      },
+      {
+        "pose": 3,
+        "stood_up": true,
+        "seconds_to_stand": 3.4,
+        "peak_base_rise_m_s": 0.91,
+        "peak_joint_speed_rad_s": 14.9,
+        "upright_at_end": true
+      },
+      {
+        "pose": 4,
+        "stood_up": true,
+        "seconds_to_stand": 2.98,
+        "peak_base_rise_m_s": 0.86,
+        "peak_joint_speed_rad_s": 11.2,
+        "upright_at_end": true
+      },
+      {
+        "pose": 5,
+        "stood_up": true,
+        "seconds_to_stand": 2.76,
+        "peak_base_rise_m_s": 0.74,
+        "peak_joint_speed_rad_s": 11.2,
+        "upright_at_end": true
+      },
+      {
+        "pose": 6,
+        "stood_up": true,
+        "seconds_to_stand": 2.08,
+        "peak_base_rise_m_s": 0.94,
+        "peak_joint_speed_rad_s": 10.1,
+        "upright_at_end": true
+      },
+      {
+        "pose": 7,
+        "stood_up": true,
+        "seconds_to_stand": 2.18,
+        "peak_base_rise_m_s": 0.96,
+        "peak_joint_speed_rad_s": 11.0,
+        "upright_at_end": true
+      },
+      {
+        "pose": 8,
+        "stood_up": true,
+        "seconds_to_stand": 1.1,
+        "peak_base_rise_m_s": 1.18,
+        "peak_joint_speed_rad_s": 12.2,
+        "upright_at_end": true
+      }
+    ],
+    "success": 8,
+    "total": 8,
+    "tempo_until_standing": {
+      "peak_base_rise_m_s_mean": 0.95,
+      "peak_base_rise_m_s_max": 1.18,
+      "joint_speed_p95_rad_s": 4.0,
+      "joint_speed_max_rad_s": 14.9
+    }
+  },
+  "wall_seconds": 3.1,
+  "inference": {
+    "format": "MNN",
+    "runtime": "EngineAI Robot Session SDK x86_64 MNN 2.9.5 CPU",
+    "sha256": "8956b941452591133537b64a8b5699379184c4c008190e2780845c56fd7adc03"
+  }
+}

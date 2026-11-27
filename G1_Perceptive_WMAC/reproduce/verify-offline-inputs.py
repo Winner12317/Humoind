@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify the default Hiking reference and the optional pool with network access forbidden."""
 from __future__ import annotations
+import argparse
 from dataclasses import asdict
 import json
 from pathlib import Path
@@ -28,9 +29,11 @@ assert (cfg.collision_horizontal_scale, cfg.depth_geometry, cfg.robot_dynamics_r
 assert cfg.standing_expert_source == 'none' and cfg.walking_expert_source == 'none'
 assert cfg.sensor_protocol == 'hiking_depth_only_v1' and cfg.robot_variant == 'unshod'
 assert cfg.action_limit is None and cfg.validation_env_fraction == 0.
-# The version 3 reference pool (official sequence plus 13 local clips) stays
-# selectable, so its offline preparation is verified as well.
-pool_cfg = parse_config(['--walking-expert-source', 'pre_hiking_local_walk_turn_v2'])
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--with-legacy-walking', action='store_true',
+                    help='Also check the v3 expert pool using your separately supplied licensed NPZ files')
+args = parser.parse_args()
+pool_report = {'verified': False, 'reason': 'Optional v3 pool was not requested'}
 output = root/'reproduce'
 output.mkdir(exist_ok=True)
 (output/'reference-config.json').write_text(json.dumps(asdict(cfg), indent=2)+'\n')
@@ -54,17 +57,20 @@ with patch('urllib.request.urlopen', side_effect=AssertionError('Motion preparat
     assert tuple(expert.groups[0].shape) == (2*18981, 67) and bool(torch.isfinite(expert.groups[0]).all())
     assert metadata['reference_start_fraction'] == [0., .9] and metadata['mirror_probability'] == .5
     assert metadata['standing_expert_source'] == 'none'
-    # Optional version 3 pool.
-    pool = PerceptiveExpertPairs(pool_cfg, env, 'cpu', pool_cfg.motion_root(root))
-    histories = pool.sample_histories(256)
-    assert histories.shape == (256, 10, 67) and bool(torch.isfinite(histories).all())
-    pool_metadata = pool.metadata
-    local = pool_metadata['legacy_walking_reference']
-    assert local['source_clips'] == 13 and local['training_clips'] == 26
-    assert local['source_frames'] == 389 and local['training_frames'] == 778
-    assert pool_metadata['groups'][0]['clip_count'] == 28
-    assert pool_metadata['official_history_window_count'] == 37944
-    assert pool_metadata['total_history_window_count'] == 38488
+    if args.with_legacy_walking:
+        pool_cfg = parse_config(['--hiking-training-version', '3'])
+        pool = PerceptiveExpertPairs(pool_cfg, env, 'cpu', pool_cfg.motion_root(root))
+        histories = pool.sample_histories(256)
+        assert histories.shape == (256, 10, 67) and bool(torch.isfinite(histories).all())
+        pool_metadata = pool.metadata
+        local = pool_metadata['legacy_walking_reference']
+        assert local['source_clips'] == 13 and local['training_clips'] == 26
+        assert local['source_frames'] == 389 and local['training_frames'] == 778
+        assert pool_metadata['groups'][0]['clip_count'] == 28
+        assert pool_metadata['official_history_window_count'] == 37944
+        assert pool_metadata['total_history_window_count'] == 38488
+        pool_report = dict(verified=True, walking_expert_source=pool_cfg.walking_expert_source,
+                           sampled_histories=list(histories.shape), metadata=pool_metadata)
     code = audit(['--training-config',str(output/'reference-config.json'),
                   '--output',str(output/'motion-audit.json')])
     assert code == 0, 'Motion audit failed'
@@ -74,8 +80,8 @@ report = dict(snapshot_date='2026-11-26', network_forbidden=True,
     robot_variant=cfg.robot_variant,
     official_reference_frames=expert.official_reference_frames,
     default_expert_metadata=metadata,
-    optional_reference_pool=dict(walking_expert_source=pool_cfg.walking_expert_source,
-        sampled_histories=list(histories.shape), metadata=pool_metadata),
+    optional_reference_pool=pool_report,
     asset_sha256={str(p.relative_to(root)):file_sha256(p) for p in (HIKING_URDF,HIKING_SHOE_URDF,HIKING_HEAD)})
 (output/'offline-input-audit.json').write_text(json.dumps(report, indent=2)+'\n')
-print('Offline inputs verified: Hiking reference (18981 frames + mirror) and the optional 28-clip pool; no standing.')
+print('Offline inputs verified: Hiking reference (18981 frames + mirror); no standing.')
+print('Optional v3 walking pool:', 'verified' if args.with_legacy_walking else 'not requested')

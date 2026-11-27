@@ -1,0 +1,69 @@
+{
+  "repository": "/home/yao/Humoind project/SuperAMP",
+  "commit": "6c7a2947fccc973e4af8e6d90e550400f1b6fcfc",
+  "branch": "",
+  "status": "M .gitignore\n M rsl_rl/algorithms/amp_ppo.py\n M rsl_rl/runners/amp_on_policy_runner.py\n M rsl_rl/utils/motion_loader.py\n M src/tasks/amp_loco/config/g1/__init__.py\n M src/tasks/amp_loco/config/g1/env_cfgs.py\n M src/tasks/amp_loco/config/g1/rl_cfg.py\n M src/tasks/amp_loco/mdp/observations.py\n M src/tasks/amp_loco/mdp/rewards.py\n M src/tasks/amp_loco/rl/runner.py\n?? THIRD_PARTY_NOTICES.md\n?? activate_local.sh\n?? docs/\n?? licenses/\n?? scripts/activate_env.sh\n?? scripts/analyze_amp_recovery_style.py\n?? scripts/analyze_centered_recovery_impact.py\n?? scripts/analyze_recovery_gap_model.py\n?? scripts/analyze_recovery_gap_rewards.py\n?? scripts/analyze_recovery_gap_style.py\n?? scripts/analyze_smooth_source_reference.py\n?? scripts/analyze_smooth_weight_pilots.py\n?? scripts/audit_centered_amp_scale.py\n?? scripts/audit_ppo_history_stats.py\n?? scripts/audit_recovery_foot_slip_directions.py\n?? scripts/audit_reference_rate_data.py\n?? scripts/benchmark_centered_amp.py\n?? scripts/benchmark_smooth_reward_trajectory.py\n?? scripts/benchmark_wmac.py\n?? scripts/calibrate_smooth_reward_scales.py\n?? scripts/check_wmac_physics.py\n?? scripts/compare_amp_learning_efficiency.py\n?? scripts/compare_amp_parameters.py\n?? scripts/compare_centered_recovery_impact.py\n?? scripts/compare_impact_style_judges.py\n?? scripts/compare_recovery_effort.py\n?? scripts/compare_wmac_moe.py\n?? scripts/compare_wmac_ppo.py\n?? scripts/compare_wmac_recovery_fixes.py\n?? scripts/diagnose_wmac.py\n?? scripts/evaluate_smooth_weight_pilots.py\n?? scripts/evaluate_wmac.py\n?? scripts/plan_wmac_moe.py\n?? scripts/play_wmac.py\n?? scripts/plot_recovery_gap.py\n?? scripts/prepare_wmac_mirrored_motions.py\n?? scripts/probe_amp_ground_cues.py\n?? scripts/probe_impact_kinematic_consistency.py\n?? scripts/probe_recovery_reward_terms.py\n?? scripts/probe_wmac_physical_directions.py\n?? scripts/probe_wmac_recorded_phases.py\n?? scripts/run_smooth_weight_pilot.py\n?? scripts/run_wmac_ablations.py\n?? scripts/summarize_wmac_ppo_comparison.py\n?? scripts/train_smooth_weights_v2.sh\n?? scripts/train_smooth_weights_v3.sh\n?? scripts/train_wmac.py\n?? scripts/validate_centered_amp_compile.py\n?? scripts/validate_smooth_motor_proxy.py\n?? scripts/validate_smooth_reward_physics.py\n?? src/amp_features.py\n?? src/recovery_rewards.py\n?? src/training_cost.py\n?? src/wmac/\n?? tests/",
+  "python": "/home/yao/miniconda3/envs/superamp/bin/python",
+  "cuda_visible_devices": "0",
+  "paper": "https://arxiv.org/abs/2610.28480",
+  "reference_implementation": "https://github.com/HybridRobotics/supermimic",
+  "reference_commit": "abc124c1bd5976341034668af3d12c087f2f1f55",
+  "alignment_scope": "Official compatible details; validated AMP local-residual dynamics, BPTT and recovery retained",
+  "motion_mirror_reference_commit": "92ca7bb8a3d8ea959d934fc13b5aae7e30317757",
+  "actor_architecture": {
+    "actor_type": "mlp",
+    "policy_hidden": [
+      64,
+      32
+    ],
+    "action_limit": null,
+    "activation": "gelu",
+    "layer_norm": true
+  },
+  "amp_reward_protocol": {
+    "amp_reward_mapping": "instantamp_centered_tanh_v1",
+    "amp_score_scale": 1.0,
+    "amp_score_ema_decay": 0.99
+  },
+  "smooth_reward_protocol": {
+    "smooth_reward_mode": "host_humanup_v1",
+    "smooth_action_second_coef": 0.0175,
+    "smooth_joint_velocity_coef": 0.000625,
+    "smooth_torque_coef": 0.000625,
+    "smooth_power_coef": 3.125e-05,
+    "formula_version": "host_humanup_rates_pd_request_v1",
+    "cost_definitions": {
+      "action_second": "sum((action - 2*previous_action + previous_previous_action)^2)",
+      "joint_velocity": "sum(next_joint_velocity^2)",
+      "torque": "l2_norm(analytic_pd_requested_torque_before_limit)",
+      "power": "l2_norm(analytic_actuator_command_torque * current_joint_velocity)"
+    },
+    "scaling": "negative_costs_inside_existing_task_scale_then_task_weight",
+    "torque_semantics": "existing_pd_request_proxy_before_limit_and_command_power_after_torque_speed_clip_and_friction_not_physical_substep_force",
+    "references": {
+      "HoST": "70bb580949a336a920833700e4b5dc3bf7fe87ce",
+      "HumanUP": "7516e0f27e6f4d1e7365cf64ea577a78247bd8cb"
+    },
+    "action_amplitude_curriculum": false,
+    "world_model_changed": false
+  },
+  "smooth_reward_reference": {
+    "HoST": {
+      "repository": "https://github.com/InternRobotics/HoST",
+      "commit": "70bb580949a336a920833700e4b5dc3bf7fe87ce"
+    },
+    "HumanUP": {
+      "repository": "https://github.com/RunpeiDong/humanup",
+      "commit": "7516e0f27e6f4d1e7365cf64ea577a78247bd8cb"
+    },
+    "scope": "Reward terms only; no action amplitude curriculum, new world-model head or extra training branch",
+    "torque_note": "Analytic existing-PD request before clipping; power uses limited/frictional command, not physical 5 ms actuator_force"
+  },
+  "amp_reward_reference": {
+    "repository": "https://github.com/RoboticsResearchHubVN/InstantAMP",
+    "commit": "9fc8031055a18d58e84d9de90639660e7aa6b491",
+    "source": "https://github.com/RoboticsResearchHubVN/InstantAMP/blob/9fc8031055a18d58e84d9de90639660e7aa6b491/instantamp/amp.py#L106-L119",
+    "scope": "Robot score EMA centering and continuous bounded tanh reward only; existing single LSGAN discriminator and world model retained",
+    "scale_note": "Fixed score scale in LSGAN +/-1 target units; InstantAMP WGAN scale 5 is not copied"
+  }
+}

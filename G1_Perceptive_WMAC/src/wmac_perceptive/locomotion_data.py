@@ -66,9 +66,8 @@ def verify_hiking_source_files(directory: Path | str) -> Path:
 def ensure_hiking_source(directory: Path | str = DEFAULT_HIKING_SOURCE) -> Path:
     """Prepare the exact source files from cache, repository bundle or download.
 
-    A normal checkout contains the three training files and needs no external
-    dataset network request. Download remains a fallback for source-only
-    installations lacking the bundle. Existing files are never overwritten.
+    Use locally supplied files or the pinned author archive. Existing files
+    must match the published digests before they can populate the cache.
     """
     directory = Path(directory).expanduser().resolve()
     directory.mkdir(parents=True, exist_ok=True)
@@ -77,24 +76,28 @@ def ensure_hiking_source(directory: Path | str = DEFAULT_HIKING_SOURCE) -> Path:
         if all((directory/name).is_file() for name in HIKING_SOURCE_SHA256):
             return verify_hiking_source_files(directory)
         bundle = Path(HIKING_BUNDLED_SOURCE)
-        if bundle.is_dir():
-            verify_hiking_source_files(bundle)
-            for name in HIKING_SOURCE_SHA256:
-                target = directory/name
-                if target.exists() and target.read_bytes() != (bundle/name).read_bytes():
-                    raise ValueError(f"Cached Hiking source was modified: {target.name}")
-                if not target.exists():
-                    shutil.copy2(bundle/name, target)
-            print("[hiking-data] Using verified official walking data bundled with the repository", flush=True)
+        for name, expected in HIKING_SOURCE_SHA256.items():
+            for path in (directory/name, bundle/name):
+                if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                    raise ValueError(f"Hiking source SHA256 differs from the pinned release (modified): {path}")
+        for name in HIKING_SOURCE_SHA256:
+            if (bundle/name).is_file() and not (directory/name).exists():
+                shutil.copy2(bundle/name, directory/name)
+        if all((directory/name).is_file() for name in HIKING_SOURCE_SHA256):
             return verify_hiking_source_files(directory)
     if not archive.exists():
         print(f"[locomotion-data] Downloading Hiking source: {HIKING_PROJECT_URL}", flush=True)
-        with urllib.request.urlopen(HIKING_DOWNLOAD_URL, timeout=60) as response:
-            data = response.read(20*1024*1024+1)
+        hint = (f"Download the authors' Data & Model archive from {HIKING_PROJECT_URL} "
+                f"and save it as {archive}, then rerun preparation.")
+        try:
+            with urllib.request.urlopen(HIKING_DOWNLOAD_URL, timeout=60) as response:
+                data = response.read(20*1024*1024+1)
+        except OSError as error:
+            raise OSError(hint) from error
         if len(data)>20*1024*1024:
             raise ValueError("Hiking archive exceeds the pinned package size limit")
         if hashlib.sha256(data).hexdigest()!=HIKING_ARCHIVE_SHA256:
-            raise ValueError("Hiking archive SHA256 differs from the pinned public release")
+            raise ValueError("Hiking archive SHA256 differs from the pinned public release. " + hint)
         temporary=archive.with_suffix('.download');temporary.write_bytes(data);temporary.replace(archive)
     if hashlib.sha256(archive.read_bytes()).hexdigest()!=HIKING_ARCHIVE_SHA256:
         raise ValueError("Cached Hiking archive was modified; use a fresh source directory")

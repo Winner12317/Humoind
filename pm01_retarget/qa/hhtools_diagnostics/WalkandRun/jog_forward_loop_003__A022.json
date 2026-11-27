@@ -1,0 +1,186 @@
+{
+  "clip": "jog_forward_loop_003__A022",
+  "group": "WalkandRun",
+  "source": "g1_source/WalkandRun/jog_forward_loop_003__A022.csv",
+  "output": "pm01_hhtools/WalkandRun/jog_forward_loop_003__A022.csv",
+  "frames": 686,
+  "fps": 120.0,
+  "scale_ratio": 1.0585971802434606,
+  "stride_scale": 1.0249875960658152,
+  "seconds": 7.3,
+  "retarget_meta": {
+    "robot": "pm01",
+    "num_mapped_joints": 16,
+    "used_mjcf": false,
+    "ik_iterations": 24,
+    "human_height": 1.3228454906915403,
+    "clip_floor_snap_m": 0.009999970411280777,
+    "execution_provenance": "{'backend': 'newton', 'device': 'cuda:0', 'device_kind': 'cuda', 'precision': 'float32', 'runtime': 'warp', 'runtime_version': '1.12.1', 'solver': 'newton-1.1.0', 'cuda_graph_requested': True, 'cuda_graph_used': True, 'fallback_used': False}",
+    "r2r_yellow_ankle_align_m": 0.007654818165162183,
+    "root_trajectory_scale": "1.024988"
+  },
+  "hhtools_diagnostics": {
+    "available": true,
+    "frame_count": 600,
+    "mapped_effectors": 14,
+    "requested_effectors": 14,
+    "quality": {
+      "band": "review",
+      "stable_max_m": 0.05602,
+      "review_max_m": 0.11203,
+      "robot_height_m": 1.4004,
+      "p95_height_ratio": 0.04427
+    },
+    "tracking": {
+      "reference": "ik_targets",
+      "mean_error_m": 0.02653,
+      "p95_error_m": 0.062,
+      "max_error_m": 0.08147,
+      "effectors": [
+        {
+          "canonical": "right_elbow",
+          "target_link": "LINK_ELBOW_PITCH_R",
+          "sample_count": 600,
+          "mean_error_m": 0.05408,
+          "p95_error_m": 0.07148,
+          "max_error_m": 0.07855
+        },
+        {
+          "canonical": "left_elbow",
+          "target_link": "LINK_ELBOW_PITCH_L",
+          "sample_count": 600,
+          "mean_error_m": 0.04703,
+          "p95_error_m": 0.067,
+          "max_error_m": 0.08147
+        },
+        {
+          "canonical": "left_shoulder",
+          "target_link": "LINK_SHOULDER_PITCH_L",
+          "sample_count": 600,
+          "mean_error_m": 0.04351,
+          "p95_error_m": 0.0641,
+          "max_error_m": 0.07883
+        },
+        {
+          "canonical": "right_shoulder",
+          "target_link": "LINK_SHOULDER_PITCH_R",
+          "sample_count": 600,
+          "mean_error_m": 0.0431,
+          "p95_error_m": 0.06374,
+          "max_error_m": 0.0759
+        },
+        {
+          "canonical": "left_wrist",
+          "target_link": "LINK_ELBOW_END_L",
+          "sample_count": 600,
+          "mean_error_m": 0.04304,
+          "p95_error_m": 0.06338,
+          "max_error_m": 0.0758
+        },
+        {
+          "canonical": "right_wrist",
+          "target_link": "LINK_ELBOW_END_R",
+          "sample_count": 600,
+          "mean_error_m": 0.04029,
+          "p95_error_m": 0.0576,
+          "max_error_m": 0.06816
+        },
+        {
+          "canonical": "right_knee",
+          "target_link": "LINK_KNEE_PITCH_R",
+          "sample_count": 600,
+          "mean_error_m": 0.02048,
+          "p95_error_m": 0.04492,
+          "max_error_m": 0.04779
+        },
+        {
+          "canonical": "left_knee",
+          "target_link": "LINK_KNEE_PITCH_L",
+          "sample_count": 600,
+          "mean_error_m": 0.02029,
+          "p95_error_m": 0.04243,
+          "max_error_m": 0.04776
+        },
+        {
+          "canonical": "left_hip",
+          "target_link": "LINK_HIP_ROLL_L",
+          "sample_count": 600,
+          "mean_error_m": 0.01103,
+          "p95_error_m": 0.0248,
+          "max_error_m": 0.04288
+        },
+        {
+          "canonical": "right_ankle",
+          "target_link": "LINK_ANKLE_ROLL_R",
+          "sample_count": 600,
+          "mean_error_m": 0.0137,
+          "p95_error_m": 0.02472,
+          "max_error_m": 0.03597
+        },
+        {
+          "canonical": "left_ankle",
+          "target_link": "LINK_ANKLE_ROLL_L",
+          "sample_count": 600,
+          "mean_error_m": 0.01303,
+          "p95_error_m": 0.02344,
+          "max_error_m": 0.03572
+        },
+        {
+          "canonical": "right_hip",
+          "target_link": "LINK_HIP_ROLL_R",
+          "sample_count": 600,
+          "mean_error_m": 0.00996,
+          "p95_error_m": 0.02339,
+          "max_error_m": 0.04363
+        },
+        {
+          "canonical": "chest",
+          "target_link": "LINK_TORSO_YAW",
+          "sample_count": 600,
+          "mean_error_m": 0.0074,
+          "p95_error_m": 0.01901,
+          "max_error_m": 0.03232
+        },
+        {
+          "canonical": "hips",
+          "target_link": "LINK_BASE",
+          "sample_count": 600,
+          "mean_error_m": 0.00454,
+          "p95_error_m": 0.01648,
+          "max_error_m": 0.02928
+        }
+      ]
+    },
+    "contact": {
+      "available": true,
+      "agreement_ratio": 0.9841,
+      "recall_ratio": 0.9723,
+      "target_slide_mean_mps": 0.0534,
+      "target_slide_p95_mps": 0.2283,
+      "feet": [
+        {
+          "side": "left",
+          "canonical": "left_ankle",
+          "target_link": "LINK_ANKLE_ROLL_L",
+          "agreement_ratio": 0.9833,
+          "recall_ratio": 0.9713,
+          "source_contact_ratio": 0.5233,
+          "target_contact_ratio": 0.51,
+          "target_slide_mean_mps": 0.0522,
+          "target_slide_p95_mps": 0.2268
+        },
+        {
+          "side": "right",
+          "canonical": "right_ankle",
+          "target_link": "LINK_ANKLE_ROLL_R",
+          "agreement_ratio": 0.985,
+          "recall_ratio": 0.9733,
+          "source_contact_ratio": 0.5,
+          "target_contact_ratio": 0.4883,
+          "target_slide_mean_mps": 0.0545,
+          "target_slide_p95_mps": 0.2283
+        }
+      ]
+    }
+  }
+}

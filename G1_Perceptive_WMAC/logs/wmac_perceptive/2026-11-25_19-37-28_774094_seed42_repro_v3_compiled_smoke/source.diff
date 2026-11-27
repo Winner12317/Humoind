@@ -1,0 +1,801 @@
+# English rendering of the patch recorded by this run. Hunk IDs refer to the original files.
+# Original patch SHA-256: 2bea4adb68c012fa85a8ca923e6be3d4be21368be6c72292bdcd964a2e250264
+diff --git a/.gitignore b/.gitignore
+index 2436f28..ba926c3 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -32,7 +32,7 @@ htmlcov/
+ Thumbs.db
+ 
+ # Project local outputs and datasets
+-logs/
++logs
+ motion_data_npz/
+ motion_data_csv/lafan1
+ rsl_rl_lib.egg-info/
+@@ -42,3 +42,6 @@ src/tasks/uni_track
+ 
+ 
+ 
++
++# Isolated generated motion mirrors and terrain caches
++.perceptive_cache
+diff --git a/README.md b/README.md
+index 778528b..88fb387 100644
+--- a/README.md
++++ b/README.md
+@@ -1,12 +1,42 @@
+ # AMP_mjlab
+ 
+-[Chinese README](README_zh.md)
++## Perceptive walking on rough terrain
++
++Fresh runs use the **unshod G1** from Hiking’s `G1ParkourRoughEnvCfg`, ported to MuJoCo/mjlab. The official torso-base URDF supplies the collision geometry, axes and inertias. The task uses Hiking’s command distributions, terrain curriculum, foot measurements, 26 reward terms, delayed actuators and eight-frame proprioceptive history. Training and playback record the robot version. Contact solving, heightfield collision and material behavior depend on the simulator. [Hiking task source](https://github.com/project-instinct/InstinctLab/blob/de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057/source/instinctlab/instinctlab/tasks/parkour/config/g1/g1_parkour_target_amp_cfg.py)
++
++The fixed front camera uses the measured G1 848×480 depth intrinsics scaled to 64×36, with Hiking’s nominal torso mount. Simulation captures at 50 Hz. Each frame goes through Hiking’s 32×18 crop, blur and 0–2.5 m normalization. The policy uses eight depth frames and a one-control-step delay. Masking and camera perturbations are off. The measured hardware profile runs at 30 Hz. Existing checkpoints load their saved camera protocol. [Measured intrinsics](src/assets/cameras/g1_depth_calibration.json)
++
++The shared AMP pool includes the complete Hiking trajectory specified by `parkour_motion_without_run.yaml` and the 13 local walking and turn clips from the pre-alignment protocol. It samples valid ten-frame windows uniformly across all clips and keeps mirror partners separate. AMP trains on 24 collected control steps with five epochs and four minibatches per epoch. For a new run, `--walking-expert-source none` selects the Hiking-only episode reference. [Bundled Hiking source and hashes](src/assets/motions/g1/hiking_official/SOURCE_MANIFEST.json)
++
++Training uses SuperMimic’s GenCoord velocity prediction, analytic integration, 7-transition supervision and H32 imagination. Fresh defaults use 4096 environments, a 2048×3 world-model MLP, 10 WM batches of 2048, an actor batch of 4096 and 1000 vector steps of GPU Replay. The depth encoder learns from online reconstruction and the WM predicts the next 128-dimensional latent directly. GPU frame sharing, batched kinematics, compilation and CUDA Graphs remain available. [SuperMimic training loop](https://github.com/HybridRobotics/supermimic/blob/abc124c1bd5976341034668af3d12c087f2f1f55/src/supermimic/runners/supermimic_runner.py) · [InstinctMJ visual learner](https://github.com/project-instinct/InstinctMJ/tree/03563ee02665f327425106372264070315673748/src/instinct_mj/rl/supermimic)
++
++```bash
++python scripts/train_wmac_perceptive.py --run-name hiking_unshod
++```
++
++Add `--actor-type transformer` to a fresh run to compare Actor architectures. The latest proprioception and command form the action query over eight proprioception tokens, the single-camera depth latent, the current command and the readout token. The policy outputs 29 actions. Resume uses the Actor architecture recorded in the checkpoint.
++
++In training version 3 (architecture 9), `--iterations` counts **vector control steps**. The console reports learner updates as `iter` and shows cumulative `wall` time and average `sec_per_iter` every 50 updates by default. `--save-interval` counts learner updates and defaults to 1000. Checkpoints use `model_<iter>.pt`. `metrics.csv` records both `vector_step` and learner `iteration`. Earlier `model_step_<vector_step>.pt` checkpoints still use their saved protocol on resume or playback.
++
++## Historical flat task
++
++The `feature/robotics_yao` branch adds world-model AMP Actor-Critic training via
++`scripts/train_wmac.py`, with policy playback, physical evaluation, benchmarks,
++and ablations. See the [WMAC guide](docs/WMAC.md) for configuration and commands.
++The PPO-AMP training entry point remains `scripts/train.py`.
++
++The new WMAC `ppo_aligned` profile and PPO task `Unitree-G1-AMP-Flat-Aligned`
++share 203D AMP features with gravity, ground height and foot motion cues, plus
++matched common parameters. See the [alignment guide](docs/AMP_GROUNDED_ALIGNMENT.md)
++for commands, checkpoint compatibility and the retained algorithm differences.
++WMAC retains UTD=0.4 and PPO retains 24-step rollouts; compare cumulative
++resources at the same measured physical performance rather than outer iterations.
+ 
+ Deployment integration code is in [ccrpRepo/wbc_fsm](https://github.com/ccrpRepo/wbc_fsm), under `MJAmp State`.
+ 
+ G1 AMP motion control project built on top of mjlab + rsl_rl.
+ 
+-Key features of this repository:
++Key features of the historical flat task:
+ 
+ - A single policy learns both locomotion (walk/run) and recovery (fall-and-get-up)
+ - AMP discriminator regularizes motion style and priors
+diff --git a/README_zh.md b/README_zh.md
+index 05a751d..09ae4c5 100644
+--- a/README_zh.md
++++ b/README_zh.md
+@@ -1,12 +1,44 @@
+ # AMP_mjlab
+ 
++## Perceptive walking on rough terrain
++
++Fresh runs use the **unshod G1** from Hiking’s `G1ParkourRoughEnvCfg`, ported to MuJoCo/mjlab. The official torso-base URDF supplies the collision geometry, axes and inertias. The task uses Hiking’s command distributions, terrain curriculum, foot measurements, 26 reward terms, delayed actuators and eight-frame proprioceptive history. Training and playback record the robot version. Contact solving, heightfield collision and material behavior depend on the simulator. [Hiking task source](https://github.com/project-instinct/InstinctLab/blob/de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057/source/instinctlab/instinctlab/tasks/parkour/config/g1/g1_parkour_target_amp_cfg.py)
++
++The fixed front camera uses the measured G1 848×480 depth intrinsics scaled to 64×36, with Hiking’s nominal torso mount. Simulation captures at 50 Hz. Each frame goes through Hiking’s 32×18 crop, blur and 0–2.5 m normalization. The policy uses eight depth frames and a one-control-step delay. Masking and camera perturbations are off. The measured hardware profile runs at 30 Hz. Existing checkpoints load their saved camera protocol. [Measured intrinsics](src/assets/cameras/g1_depth_calibration.json)
++
++The shared AMP pool includes the complete Hiking trajectory specified by `parkour_motion_without_run.yaml` and the 13 local walking and turn clips from the pre-alignment protocol. It samples valid ten-frame windows uniformly across all clips and keeps mirror partners separate. AMP trains on 24 collected control steps with five epochs and four minibatches per epoch. For a new run, `--walking-expert-source none` selects the Hiking-only episode reference. [Bundled Hiking source and hashes](src/assets/motions/g1/hiking_official/SOURCE_MANIFEST.json)
++
++Training uses SuperMimic’s GenCoord velocity prediction, analytic integration, 7-transition supervision and H32 imagination. Fresh defaults use 4096 environments, a 2048×3 world-model MLP, 10 WM batches of 2048, an actor batch of 4096 and 1000 vector steps of GPU Replay. The depth encoder learns from online reconstruction and the WM predicts the next 128-dimensional latent directly. GPU frame sharing, batched kinematics, compilation and CUDA Graphs remain available. [SuperMimic training loop](https://github.com/HybridRobotics/supermimic/blob/abc124c1bd5976341034668af3d12c087f2f1f55/src/supermimic/runners/supermimic_runner.py) · [InstinctMJ visual learner](https://github.com/project-instinct/InstinctMJ/tree/03563ee02665f327425106372264070315673748/src/instinct_mj/rl/supermimic)
++
++```bash
++python scripts/train_wmac_perceptive.py --run-name hiking_unshod
++```
++
++Add `--actor-type transformer` to a fresh run to compare Actor architectures. The latest proprioception and command form the action query over eight proprioception tokens, the single-camera depth latent, the current command and the readout token. The policy outputs 29 actions. Resume uses the Actor architecture recorded in the checkpoint.
++
++In training version 3 (architecture 9), `--iterations` counts **vector control steps**. The console reports learner updates as `iter` and shows cumulative `wall` time and average `sec_per_iter` every 50 updates by default. `--save-interval` counts learner updates and defaults to 1000. Checkpoints use `model_<iter>.pt`. `metrics.csv` records both `vector_step` and learner `iteration`. Earlier `model_step_<vector_step>.pt` checkpoints still use their saved protocol on resume or playback.
++
++## Historical flat task
++
++The feature/robotics_yao branch introduces the world-model Actor-Critic approach in `scripts/train_wmac.py`. See the WMAC guide for the workflow and ablation commands. The PPO-AMP entry point is `scripts/train.py`.
++
++The supermimic profile matches the reference scale, eight-step model supervision, and 32-step Actor/Critic imagination. The balanced profile uses the same windows with smaller networks and batches. The parameter-alignment guide covers compatibility, and the performance report covers the GPU benchmarks at matched precision.
++
++The ppo_aligned profile and Unitree-G1-AMP-Flat-Aligned PPO task share 203-dimensional AMP features for gravity, clearance, and foot motion. The alignment guide covers training commands and differences between the methods.
++
++WMAC uses UTD 0.4 and PPO uses 24 steps per rollout. Compare time and interactions required for equivalent physical performance. The alignment guide covers explicit budget migration for older checkpoints.
++
++The integration report (Markdown and PDF) covers the move from AMP to world-model training, legacy policy selection, defect fixes, performance measurements, and operation with 4,096 environments.
++
++Play the new policy in a browser with `python scripts/play_wmac.py --checkpoint /path/to/run/best_model.pt --mode recovery --viewer viser`, or use `--viewer native` for a local window. The WMAC guide covers playback and recording.
++
+ [English README](README.md)
+ 
+ Deployment integration is in the MJAmp State of the [ccrpRepo/wbc_fsm project](https://github.com/ccrpRepo/wbc_fsm).
+ 
+ G1 AMP motion control using mjlab and rsl_rl.
+ 
+-Project features:
++Features of the historical flat task:
+ 
+ - A single policy learns walking, running, and fall recovery.
+ - An AMP discriminator provides a motion-style prior.
+@@ -36,6 +68,38 @@
+ - Python 3.11 (recommended)
+ - Working MuJoCo installation and GPU driver
+ 
++## Configured training environment
++
++The original machine used the yao-rl Conda environment at /home/autel/miniforge3/envs/yao-rl with Python 3.11, PyTorch 2.7.0+cu126, mjlab 1.2.0, mujoco-warp 3.8.1, and warp-lang 1.12.0. The project was installed in editable mode and the observation manager matched the bundled patch.
++
++Run the following in the project directory when opening a new terminal:
++
++```bash
++cd /home/autel/AMP_mjlab_wmac
++source scripts/activate_env.sh
++python scripts/list_envs.py --keyword AMP
++python scripts/train.py Unitree-G1-AMP-Flat --env.scene.num-envs 4096
++```
++
++The activation script selects the existing environment, sets MUJOCO_GL=egl, and prepends the repository to PYTHONPATH so the local AMP fork of rsl_rl is imported. The existing rsl-rl-lib==5.0.1 distribution satisfies mjlab; no second editable installation of rsl_rl is needed on that machine.
++
++On other machines use AMP_CONDA_ENV to select an environment and AMP_CONDA_ROOT to select a Conda installation. With no root specified, the script checks the active Conda, then the usual locations under the home directory.
++
++Short training check (exits when complete):
++
++```bash
++python scripts/train.py Unitree-G1-AMP-Flat \
++  --env.scene.num-envs 16 --agent.max-iterations 2 \
++  --agent.num-steps-per-env 8 --agent.algorithm.num-learning-epochs 1 \
++  --agent.run-name env_smoke
++```
++
++TensorBoard is the default logger and requires no Weights & Biases login. View the training curves with:
++
++```bash
++tensorboard --logdir logs/rsl_rl/g1_amp_locomotion --port 6006
++```
++
+ ## Quick start
+ 
+ ### 1. Install the repository
+diff --git a/rsl_rl/algorithms/amp_ppo.py b/rsl_rl/algorithms/amp_ppo.py
+index b4fa6fb..542be8f 100644
+--- a/rsl_rl/algorithms/amp_ppo.py
++++ b/rsl_rl/algorithms/amp_ppo.py
+@@ -66,6 +66,8 @@ class AMPPPO:
+         # Distributed training parameters
+         multi_gpu_cfg: dict | None = None,
+         share_cnn_encoders=False,
++        amp_normalizer_use_raw: bool = False,
++        amp_gp_normalized: bool = False,
+     ):
+         # device-related parameters
+         self.device = device
+@@ -119,6 +121,8 @@ class AMPPPO:
+         self.amp_storage = ReplayBuffer(discriminator.input_dim // 2, amp_replay_buffer_size, device)
+         self.amp_data = amp_data
+         self.amp_normalizer = amp_normalizer
++        self.amp_normalizer_use_raw = amp_normalizer_use_raw
++        self.amp_gp_normalized = amp_gp_normalized
+ 
+         # PPO components
+         self.policy = policy
+@@ -446,7 +450,8 @@ class AMPPPO:
+             expert_loss = torch.nn.MSELoss()(expert_d, torch.ones(expert_d.size(), device=self.device))
+             policy_loss = torch.nn.MSELoss()(policy_d, -1 * torch.ones(policy_d.size(), device=self.device))
+             amp_loss = 0.5 * (expert_loss + policy_loss)
+-            grad_pen_loss = self.discriminator.compute_grad_pen(*sample_amp_expert, lambda_=10)
++            penalty_pair = (expert_state, expert_next_state) if self.amp_gp_normalized else sample_amp_expert
++            grad_pen_loss = self.discriminator.compute_grad_pen(*penalty_pair, lambda_=10)
+             loss += self.amploss_coef * amp_loss + self.amploss_coef * grad_pen_loss
+ 
+             # Compute the gradients
+@@ -495,8 +500,12 @@ class AMPPPO:
+                 self.rnd_optimizer.step()
+ 
+             if self.amp_normalizer is not None:
+-                self.amp_normalizer.update(policy_state.cpu().numpy())
+-                self.amp_normalizer.update(expert_state.cpu().numpy())
++                if self.amp_normalizer_use_raw:
++                    for raw_state in (*sample_amp_policy, *sample_amp_expert):
++                        self.amp_normalizer.update(raw_state.cpu().numpy())
++                else:
++                    self.amp_normalizer.update(policy_state.cpu().numpy())
++                    self.amp_normalizer.update(expert_state.cpu().numpy())
+ 
+             # Store the losses
+             effective_updates += 1
+diff --git a/rsl_rl/runners/amp_on_policy_runner.py b/rsl_rl/runners/amp_on_policy_runner.py
+index fd4658b..f744533 100644
+--- a/rsl_rl/runners/amp_on_policy_runner.py
++++ b/rsl_rl/runners/amp_on_policy_runner.py
+@@ -18,9 +18,11 @@
+ 
+ from __future__ import annotations
+ 
++import math
+ import os
+ import statistics
+ import time
++import uuid
+ from collections import deque
+ 
+ import torch
+@@ -37,6 +39,7 @@ from rsl_rl.modules import (
+     StudentTeacherRecurrent,
+ )
+ from rsl_rl.utils import AMPLoader, Normalizer, store_code_state
++from src.amp_features import LEGACY_SCHEMA, amp_feature_dim, amp_feature_metadata
+ 
+ 
+ def _migrate_train_cfg(train_cfg: dict) -> None:
+@@ -92,10 +95,29 @@ def _unpack_step(obs, rew, dones, infos):
+     return obs, rew, dones, infos
+ 
+ 
++def _validate_amp_checkpoint_schema(payload: dict, expected_schema: str, expected_dim: int) -> None:
++    """Refuse incompatible AMP inputs before mutating any live network."""
++    schema = payload.get("amp_feature_schema", LEGACY_SCHEMA)
++    dimension = payload.get("amp_feature_dim", amp_feature_dim(schema))
++    if schema != expected_schema or dimension != expected_dim:
++        raise ValueError(
++            f"Checkpoint AMP schema {schema!r}/{dimension} is incompatible with "
++            f"this task's {expected_schema!r}/{expected_dim}. Start a new run with "
++            "the matching task; legacy discriminator statistics cannot be resumed as grounded_v2."
++        )
++
++
+ class AmpOnPolicyRunner:
+     """On-policy runner for training and evaluation."""
+ 
+     def __init__(self, env: VecEnv, train_cfg: dict, log_dir: str | None = None, device="cpu"):
++        # Include model/expert initialization and all later runner work. The
++        # simulator/environment has already been constructed by the caller.
++        self._cost_started = time.perf_counter()
++        self._cost_wall_offset = 0.0
++        self._physical_transitions = 0
++        self._cost_history_complete = True
++        self._cost_trajectory_id = str(uuid.uuid4())
+         _migrate_train_cfg(train_cfg)
+         self.cfg = train_cfg
+         self.alg_cfg = train_cfg["algorithm"]
+@@ -170,7 +192,14 @@ class AmpOnPolicyRunner:
+             anchor_name=train_cfg["amp_anchor_name"],
+             all_body_names=all_body_names,
+             device=self.device,
++            feature_schema=train_cfg.get("amp_feature_schema", LEGACY_SCHEMA),
++            expert_recovery_fraction=train_cfg.get("amp_expert_recovery_fraction"),
+         )
++        self.amp_feature_schema = amp_data.feature_schema
++        self.amp_feature_dim = amp_data.observation_dim
++        actual_amp_dim = extras["observations"]["amp"].shape[1]
++        if actual_amp_dim != self.amp_feature_dim:
++            raise ValueError(f"AMP expert width {self.amp_feature_dim} does not match environment width {actual_amp_dim}")
+         amp_normalizer = Normalizer(amp_data.observation_dim)
+         discriminator = Discriminator(
+             amp_data.observation_dim * 2,
+@@ -212,6 +241,8 @@ class AmpOnPolicyRunner:
+             device=self.device,
+             min_std=min_std,
+             **self.alg_cfg,
++            amp_normalizer_use_raw=train_cfg.get("amp_normalizer_use_raw", False),
++            amp_gp_normalized=train_cfg.get("amp_gp_normalized", False),
+             multi_gpu_cfg=self.multi_gpu_cfg,
+         )
+ 
+@@ -244,6 +275,7 @@ class AmpOnPolicyRunner:
+         # Logging
+         self.log_dir = log_dir
+         self.writer = None
++        self.logger_type = self.cfg.get("logger", "tensorboard").lower()
+         self.tot_timesteps = 0
+         self.tot_time = 0
+         self.current_learning_iteration = 0
+@@ -323,6 +355,12 @@ class AmpOnPolicyRunner:
+                     actions = self.alg.act(obs, privileged_obs, amp_obs)
+                     # Step the environment
+                     obs, rewards, dones, infos = _unpack_step(*self.env.step(actions.to(self.env.device)))
++                    # Count physical interactions regardless of logging and the
++                    # zero-based checkpoint iteration label.
++                    transitions = self.env.num_envs * self.gpu_world_size
++                    self.tot_timesteps += transitions
++                    if self._physical_transitions is not None:
++                        self._physical_transitions += transitions
+                     next_amp_obs = infos["observations"]["amp"]
+                     # Move to device
+                     obs, rewards, dones, next_amp_obs = (
+@@ -400,6 +438,7 @@ class AmpOnPolicyRunner:
+ 
+             stop = time.time()
+             learn_time = stop - start
++            self.tot_time += collection_time + learn_time
+             self.current_learning_iteration = it
+             # log info
+             if self.log_dir is not None and not self.disable_logs:
+@@ -412,7 +451,7 @@ class AmpOnPolicyRunner:
+             # Clear episode infos
+             ep_infos.clear()
+             # Save code state
+-            if it == start_iter and not self.disable_logs:
++            if it == start_iter and self.log_dir is not None and not self.disable_logs:
+                 # obtain all the diff files
+                 git_file_paths = store_code_state(self.log_dir, self.git_status_repos)
+                 # if possible store them to wandb
+@@ -427,9 +466,7 @@ class AmpOnPolicyRunner:
+     def log(self, locs: dict, width: int = 80, pad: int = 35):
+         # Compute the collection size
+         collection_size = self.num_steps_per_env * self.env.num_envs * self.gpu_world_size
+-        # Update total time-steps and time
+-        self.tot_timesteps += collection_size
+-        self.tot_time += locs["collection_time"] + locs["learn_time"]
++        # Counters are updated by learn(), including when no writer is enabled.
+         iteration_time = locs["collection_time"] + locs["learn_time"]
+ 
+         # -- Episode info
+@@ -531,6 +568,50 @@ class AmpOnPolicyRunner:
+         )
+         print(log_string)
+ 
++    def training_cost(self):
++        """Cumulative resources at this checkpoint; unknown history stays unknown."""
++        from src.training_cost import WALL_TIME_SCOPE
++
++        wall = (None if self._cost_wall_offset is None else
++                self._cost_wall_offset + time.perf_counter() - self._cost_started)
++        gpu_count = self.gpu_world_size if torch.device(self.device).type == "cuda" else 0
++        return {
++            "physical_transitions": self._physical_transitions,
++            "wall_seconds": wall,
++            "gpu_count": gpu_count,
++            "wall_time_scope": WALL_TIME_SCOPE,
++            "history_complete": self._cost_history_complete,
++            "trajectory_id": self._cost_trajectory_id,
++        }
++
++    def _restore_training_cost(self, payload):
++        from src.training_cost import WALL_TIME_SCOPE
++
++        cost = payload.get("training_cost")
++        if not isinstance(cost, dict):
++            # Old PPO checkpoints did not persist reliable costs. In particular,
++            # iter=0 already followed a rollout and must not be used to infer it.
++            self._physical_transitions = None
++            self._cost_wall_offset = None
++            self._cost_history_complete = False
++            self._cost_trajectory_id = None
++            return
++        transitions, wall = cost.get("physical_transitions"), cost.get("wall_seconds")
++        valid_transitions = isinstance(transitions, int) and not isinstance(transitions, bool) and transitions >= 0
++        valid_wall = isinstance(wall, (int, float)) and not isinstance(wall, bool) and math.isfinite(wall) and wall >= 0
++        self._physical_transitions = transitions if valid_transitions else None
++        self._cost_wall_offset = float(wall) if valid_wall else None
++        trajectory_id = cost.get("trajectory_id")
++        self._cost_trajectory_id = trajectory_id if isinstance(trajectory_id, str) and trajectory_id else None
++        current_gpus = self.gpu_world_size if torch.device(self.device).type == "cuda" else 0
++        self._cost_history_complete = bool(
++            cost.get("history_complete") is True and valid_transitions and valid_wall
++            and cost.get("wall_time_scope") == WALL_TIME_SCOPE
++            and cost.get("gpu_count") == current_gpus
++        )
++        if valid_transitions:
++            self.tot_timesteps = transitions
++
+     def save(self, path: str, infos=None):
+         # -- Save model
+         saved_dict = {
+@@ -539,7 +620,14 @@ class AmpOnPolicyRunner:
+             "discriminator_state_dict": self.alg.discriminator.state_dict(),
+             "amp_normalizer": self.alg.amp_normalizer,
+             "iter": self.current_learning_iteration,
++            "training_cost": self.training_cost(),
+             "infos": infos,
++            "amp_feature_schema": self.amp_feature_schema,
++            "amp_feature_dim": self.amp_feature_dim,
++            "amp_feature_metadata": amp_feature_metadata(
++                self.amp_feature_schema, len(self.cfg["amp_body_names"])
++            ),
++            "amp_expert_recovery_fraction": self.cfg.get("amp_expert_recovery_fraction"),
+         }
+         # -- Save RND model if used
+         if self.alg.rnd:
+@@ -559,6 +647,7 @@ class AmpOnPolicyRunner:
+ 
+     def load(self, path: str, load_optimizer: bool = True):
+         loaded_dict = torch.load(path, weights_only=False)
++        _validate_amp_checkpoint_schema(loaded_dict, self.amp_feature_schema, self.amp_feature_dim)
+ 
+         # -- Load model (support both native and mjlab v5 checkpoint formats)
+         if "model_state_dict" in loaded_dict:
+@@ -612,6 +701,7 @@ class AmpOnPolicyRunner:
+         # -- load current learning iteration
+         if resumed_training:
+             self.current_learning_iteration = loaded_dict["iter"]
++        self._restore_training_cost(loaded_dict)
+         return loaded_dict["infos"]
+ 
+     def get_inference_policy(self, device=None):
+diff --git a/rsl_rl/utils/motion_loader.py b/rsl_rl/utils/motion_loader.py
+index fbb47bd..7c457b7 100644
+--- a/rsl_rl/utils/motion_loader.py
++++ b/rsl_rl/utils/motion_loader.py
+@@ -7,6 +7,7 @@ from collections.abc import Sequence
+ from tqdm import tqdm
+ 
+ import mjlab.utils.lab_api.math as math_utils
++from src.amp_features import LEGACY_SCHEMA, amp_feature_dim, amp_feature_metadata, build_amp_features
+ 
+ 
+ class AMPLoader:
+@@ -14,7 +15,9 @@ class AMPLoader:
+                  body_names: Sequence[str],
+                  anchor_name: str,
+                  all_body_names: Sequence[str],
+-                 device: str = "cuda:0"):
++                 device: str = "cuda:0",
++                 feature_schema: str = LEGACY_SCHEMA,
++                 expert_recovery_fraction: float | None = None):
+         """Load AMP motion data.
+ 
+         Args:
+@@ -25,6 +28,8 @@ class AMPLoader:
+                 The index of each name in this list must match the body
+                 dimension in the .npz arrays.
+             device: Torch device.
++            feature_schema: Versioned features; the default preserves old data.
++            expert_recovery_fraction: Recovery pair proportion for the new schema.
+         """
+         assert os.path.exists(motion_file), f"Invalid path: {motion_file}"
+ 
+@@ -33,6 +38,11 @@ class AMPLoader:
+         self._body_indexes = [all_names_list.index(n) for n in body_names]
+         self._anchor_indexes = all_names_list.index(anchor_name)
+         self._num_bodies = len(self._body_indexes)
++        self.feature_schema = feature_schema
++        self.feature_metadata = amp_feature_metadata(feature_schema, self._num_bodies)
++        if expert_recovery_fraction is not None and not 0 <= expert_recovery_fraction <= 1:
++            raise ValueError("expert_recovery_fraction must be between zero and one")
++        self.expert_recovery_fraction = expert_recovery_fraction
+ 
+         # Accept a single file or a directory.
+         if os.path.isfile(motion_file):
+@@ -56,6 +66,9 @@ class AMPLoader:
+         
+         # Store data for all motion clips.
+         self.motion_names = motion_names
++        if feature_schema != LEGACY_SCHEMA:
++            self._load_grounded_pairs(motion_files, all_names_list, device)
++            return
+         self._body_pos_b_list = []
+         self._body_quat_b_list = []
+         self._body_ori_b_list = []
+@@ -146,11 +159,59 @@ class AMPLoader:
+ 
+     @property
+     def observation_dim(self) -> int:
+-        num_bodies = len(self._body_indexes)
+-        obs_dim = (3 + 6 + 3 + 3) * num_bodies  # pos, mat[:,:2], lin_vel, ang_vel
+-        return obs_dim
++        return amp_feature_dim(self.feature_schema, self._num_bodies)
++
++    def _load_grounded_pairs(self, motion_files, all_names, device):
++        """Use exactly the shared kinematics and pair pools used by WMAC."""
++        groups = [[], []]
++        self.device = torch.device(device)
++        for motion_idx, path in enumerate(motion_files):
++            with np.load(path) as data:
++                if motion_idx == 0:
++                    self.fps = data["fps"].copy()
++                arrays = [torch.as_tensor(data[key], dtype=torch.float32, device=device)
++                          for key in ("body_pos_w", "body_quat_w", "body_lin_vel_w", "body_ang_vel_w")]
++            features = build_amp_features(
++                *arrays, body_ids=self._body_indexes, anchor_id=self._anchor_indexes,
++                pelvis_id=all_names.index("pelvis"),
++                foot_ids=[all_names.index(name) for name in
++                          ("left_ankle_roll_link", "right_ankle_roll_link")],
++                schema=self.feature_schema,
++            )
++            if motion_idx == 0:
++                self.time_step_total = len(features)
++                self.motion_total_time = self.time_step_total / self.fps
++            if len(features) > 1:
++                recovery = "recovery" in {part.lower() for part in os.path.normpath(path).split(os.sep)}
++                groups[int(recovery)].append(torch.stack((features[:-1], features[1:]), 1))
++        self._pair_groups = [torch.cat(group) if group else None for group in groups]
++        if not any(group is not None for group in self._pair_groups):
++            raise ValueError("No adjacent expert motion pairs were found")
++
++    def _sample_grounded_pairs(self, size):
++        fraction = self.expert_recovery_fraction
++        if fraction is None or fraction == 0:
++            if not hasattr(self, "_all_pairs"):
++                self._all_pairs = torch.cat([group for group in self._pair_groups if group is not None])
++            pool = self._all_pairs
++            pairs = pool[torch.randint(len(pool), (size,), device=self.device)]
++        else:
++            recovery_count = int(round(size * fraction))
++            parts = []
++            for group_id, count in enumerate((size - recovery_count, recovery_count)):
++                if count:
++                    pool = self._pair_groups[group_id]
++                    if pool is None:
++                        pool = self._pair_groups[1 - group_id]
++                    parts.append(pool[torch.randint(len(pool), (count,), device=self.device)])
++            pairs = torch.cat(parts)[torch.randperm(size, device=self.device)]
++        return pairs[:, 0], pairs[:, 1]
+ 
+     def feed_forward_generator(self, num_mini_batch, mini_batch_size):
++        if self.feature_schema != LEGACY_SCHEMA:
++            for _ in range(num_mini_batch):
++                yield self._sample_grounded_pairs(mini_batch_size)
++            return
+         num_motions = len(self._body_pos_b_list)
+         
+         for batch_idx in range(num_mini_batch):
+diff --git a/setup.py b/setup.py
+old mode 100755
+new mode 100644
+index 5d82999..ef928b5
+--- a/setup.py
++++ b/setup.py
+@@ -7,7 +7,8 @@ INSTALL_REQUIRES = [
+     "mjlab==1.2.0",
+     "mujoco-warp==3.8.1",
+     "warp-lang==1.12.0",
+-    "scipy==1.17.0"
++    "scipy==1.17.0",
++    "joblib==1.5.2",
+ ]
+ 
+ # Installation operation
+diff --git a/src/tasks/amp_loco/config/g1/__init__.py b/src/tasks/amp_loco/config/g1/__init__.py
+index 471009b..671fd4f 100644
+--- a/src/tasks/amp_loco/config/g1/__init__.py
++++ b/src/tasks/amp_loco/config/g1/__init__.py
+@@ -3,9 +3,10 @@ from src.tasks.amp_loco.rl import AMPOnPolicyRunner
+ 
+ from .env_cfgs import (
+   g1_amp_flat_env_cfg,
++  g1_amp_flat_aligned_env_cfg,
+   g1_amp_rough_env_cfg,
+ )
+-from .rl_cfg import g1_amp_ppo_runner_cfg
++from .rl_cfg import g1_amp_ppo_runner_cfg, g1_amp_aligned_ppo_runner_cfg
+ 
+ register_mjlab_task(
+   task_id="Unitree-G1-AMP-Rough",
+@@ -21,4 +22,12 @@ register_mjlab_task(
+   play_env_cfg=g1_amp_flat_env_cfg(play=True),
+   rl_cfg=g1_amp_ppo_runner_cfg(),
+   runner_cls=AMPOnPolicyRunner,
+-)
+\ No newline at end of file
++)
++
++register_mjlab_task(
++  task_id="Unitree-G1-AMP-Flat-Aligned",
++  env_cfg=g1_amp_flat_aligned_env_cfg(),
++  play_env_cfg=g1_amp_flat_aligned_env_cfg(play=True),
++  rl_cfg=g1_amp_aligned_ppo_runner_cfg(),
++  runner_cls=AMPOnPolicyRunner,
++)
+diff --git a/src/tasks/amp_loco/config/g1/env_cfgs.py b/src/tasks/amp_loco/config/g1/env_cfgs.py
+index 16fbb14..e40239b 100644
+--- a/src/tasks/amp_loco/config/g1/env_cfgs.py
++++ b/src/tasks/amp_loco/config/g1/env_cfgs.py
+@@ -11,10 +11,16 @@ from mjlab.envs import mdp as envs_mdp
+ from mjlab.envs.mdp.actions import JointPositionActionCfg
+ from mjlab.managers.event_manager import EventTermCfg
+ from mjlab.managers.reward_manager import RewardTermCfg
++from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
++from mjlab.managers.scene_entity_config import SceneEntityCfg
+ from mjlab.sensor import ContactMatch, ContactSensorCfg, RayCastSensorCfg
+ from mjlab.tasks.velocity import mdp
+ from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
+ from src.tasks.amp_loco.amp_env_cfg import make_amp_env_cfg
++from src.tasks.amp_loco.mdp.observations import (
++  aligned_critic_features,
++  robot_grounded_amp_features,
++)
+ 
+ def g1_amp_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+   """Create Unitree G1 rough terrain velocity configuration."""
+@@ -201,3 +207,41 @@ def g1_amp_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+     twist_cmd.ranges.ang_vel_z = (-3.14 / 2, 3.14 / 2)
+ 
+   return cfg
++
++
++def g1_amp_flat_aligned_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
++  """Flat PPO/WM comparison with identical grounded AMP and critic inputs."""
++  cfg = g1_amp_flat_env_cfg(play=play)
++  if not play:
++    cfg.scene.num_envs = 4096
++  old_terms = cfg.observations["amp"].terms
++  body_cfg = old_terms["body_pos_b"].params["body_cfg"]
++  body_cfg.preserve_order = True
++  anchor_cfg = old_terms["body_pos_b"].params["anchor_cfg"]
++  cfg.observations["amp"] = ObservationGroupCfg(
++    terms={
++      "grounded_features": ObservationTermCfg(
++        func=robot_grounded_amp_features,
++        params={
++          "anchor_cfg": anchor_cfg,
++          "body_cfg": body_cfg,
++          "pelvis_cfg": SceneEntityCfg("robot", body_names=("pelvis",)),
++          "foot_cfg": SceneEntityCfg(
++            "robot", body_names=("left_ankle_roll_link", "right_ankle_roll_link"),
++            preserve_order=True,
++          ),
++          "schema": "grounded_v2",
++        },
++      ),
++    },
++    concatenate_terms=True,
++    enable_corruption=False,
++    history_length=1,
++  )
++  cfg.observations["critic"] = ObservationGroupCfg(
++    terms={"physical_context": ObservationTermCfg(func=aligned_critic_features)},
++    concatenate_terms=True,
++    enable_corruption=False,
++    history_length=1,
++  )
++  return cfg
+diff --git a/src/tasks/amp_loco/config/g1/rl_cfg.py b/src/tasks/amp_loco/config/g1/rl_cfg.py
+index 996558f..05b9e77 100644
+--- a/src/tasks/amp_loco/config/g1/rl_cfg.py
++++ b/src/tasks/amp_loco/config/g1/rl_cfg.py
+@@ -29,6 +29,10 @@ class RslRlAmpRunnerCfg(RslRlOnPolicyRunnerCfg):
+   min_normalized_std: List[float] = field(default_factory=lambda: [0.05] * 29)
+   amp_body_names: tuple = ()
+   amp_anchor_name: str = ""
++  amp_feature_schema: str = "legacy"
++  amp_expert_recovery_fraction: float | None = None
++  amp_normalizer_use_raw: bool = False
++  amp_gp_normalized: bool = False
+ 
+ 
+ def g1_amp_ppo_runner_cfg() -> RslRlAmpRunnerCfg:
+@@ -92,4 +96,16 @@ def g1_amp_ppo_runner_cfg() -> RslRlAmpRunnerCfg:
+       "right_wrist_yaw_link",
+     ),
+     amp_anchor_name="torso_link",
+-  )
+\ No newline at end of file
++  )
++
++
++def g1_amp_aligned_ppo_runner_cfg() -> RslRlAmpRunnerCfg:
++  """Comparable PPO arm with grounded AMP inputs; keep the PPO update method."""
++  cfg = g1_amp_ppo_runner_cfg()
++  cfg.experiment_name = "g1_amp_locomotion_aligned"
++  cfg.amp_feature_schema = "grounded_v2"
++  cfg.amp_expert_recovery_fraction = 0.5
++  cfg.amp_normalizer_use_raw = True
++  cfg.amp_gp_normalized = True
++  cfg.actor.distribution_cfg["init_std"] = 0.25
++  return cfg
+diff --git a/src/tasks/amp_loco/mdp/observations.py b/src/tasks/amp_loco/mdp/observations.py
+index ad9bc6e..d9019df 100644
+--- a/src/tasks/amp_loco/mdp/observations.py
++++ b/src/tasks/amp_loco/mdp/observations.py
+@@ -100,4 +100,39 @@ def robot_body_ang_vel_b(
+         body_ang_vel_w.reshape(-1, 3),
+     ).reshape(env.num_envs, num_bodies, 3)
+ 
+-    return body_ang_vel_b.reshape(env.num_envs, -1)
+\ No newline at end of file
++    return body_ang_vel_b.reshape(env.num_envs, -1)
++
++
++def robot_grounded_amp_features(
++    env: ManagerBasedRlEnv,
++    anchor_cfg: SceneEntityCfg,
++    body_cfg: SceneEntityCfg,
++    pelvis_cfg: SceneEntityCfg,
++    foot_cfg: SceneEntityCfg,
++    schema: str = "grounded_v2",
++) -> torch.Tensor:
++    """Shared expert/real/model AMP layout, including flat-ground pose cues."""
++    # Entity derived body buffers can lag qpos by one physics substep. Read
++    # the true generalized state and apply the same FK used in imagination.
++    adapter = _aligned_state_adapter(env)
++    if adapter.amp_feature_schema != schema:
++        raise ValueError("AMP observation and state-adapter schemas must agree")
++    return adapter.amp_features(adapter.state())
++
++
++def _aligned_state_adapter(env: ManagerBasedRlEnv):
++    from src.wmac.state import StateAdapter
++
++    adapter = getattr(env, "_aligned_critic_state_adapter", None)
++    if adapter is None:
++        adapter = StateAdapter(env)
++        env._aligned_critic_state_adapter = adapter
++    return adapter
++
++
++def aligned_critic_features(env: ManagerBasedRlEnv) -> torch.Tensor:
++    """Use the same 136 physical/context inputs as the WMAC critic."""
++    adapter = _aligned_state_adapter(env)
++    return adapter.critic_features(
++        adapter.state(), env.action_manager.action, adapter.command(), adapter.context()
++    )
+diff --git a/src/tasks/amp_loco/mdp/rewards.py b/src/tasks/amp_loco/mdp/rewards.py
+index 8197e3b..ecfb4c0 100644
+--- a/src/tasks/amp_loco/mdp/rewards.py
++++ b/src/tasks/amp_loco/mdp/rewards.py
+@@ -16,6 +16,7 @@ from mjlab.utils.lab_api.math import (
+ from mjlab.utils.lab_api.string import (
+   resolve_matching_names_values,
+ )
++from src.recovery_rewards import recovery_height_reward, recovery_root_up_z
+ 
+ if TYPE_CHECKING:
+   from mjlab.envs import ManagerBasedRlEnv
+@@ -157,14 +158,20 @@ def track_root_height(
+   mask_delay: bool = False,
+   delay_env_rew_ratio: float = 1.0,
+   asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
++  upright_power: float = 0.0,
+ ) -> torch.Tensor:
+-  """Reward for tracking the commanded anchor height."""
++  """Root-height tracking, optionally gated by root link uprightness.
++
++  The default retains legacy height-only semantics. ``upright_power=2`` gates
++  this recovery-only term by positive root up_z squared.
++  """
+   asset: Entity = env.scene[asset_cfg.name]
+ 
+   desired_height = asset.data.default_root_state[:, 2]
+   cur_root_height = asset.data.body_link_pos_w[:, 0, 2]
+-  height_error = torch.square(desired_height - cur_root_height)
+-  reward = torch.exp(-height_error / std**2)
++  up_z = recovery_root_up_z(asset.data.body_link_quat_w[:, 0]) if upright_power else None
++  reward = recovery_height_reward(cur_root_height, desired_height, std,
++    up_z=up_z, upright_power=upright_power)
+   return _apply_delay_env_reward_mask_only(env, reward, mask_delay, delay_env_rew_ratio)
+ 
+ def feet_slip(
+diff --git a/src/tasks/amp_loco/rl/runner.py b/src/tasks/amp_loco/rl/runner.py
+index e7f6aea..ef40782 100644
+--- a/src/tasks/amp_loco/rl/runner.py
++++ b/src/tasks/amp_loco/rl/runner.py
+@@ -1,4 +1,5 @@
+ import os
++import copy
+ import inspect
+ 
+ import torch
+@@ -71,11 +72,18 @@ class AMPOnPolicyRunner(AmpOnPolicyRunner):
+     The exported model includes the obs normalizer (if empirical_normalization
+     is enabled) so that the ONNX model expects raw observations directly.
+     """
+-    policy = self.alg.policy
++    # Export independent copies so periodic saves cannot move the live policy
++    # or leave its observation normalizer in eval mode during PPO training.
++    # The last Gaussian distribution caches non-leaf means/scales after an
++    # update, which PyTorch cannot deepcopy. Inference only uses the actor.
++    live_policy = self.alg.policy
++    distribution = getattr(live_policy, "distribution", None)
++    memo = {id(distribution): None} if distribution is not None else None
++    policy = copy.deepcopy(live_policy, memo)
+     # Include normalizer in the ONNX model if empirical normalization is used
+     obs_normalizer = None
+     if self.empirical_normalization:
+-      obs_normalizer = self.obs_normalizer
++      obs_normalizer = copy.deepcopy(self.obs_normalizer)
+       obs_normalizer.to("cpu")
+       obs_normalizer.eval()
+     wrapper = _OnnxPolicyWrapper(policy, obs_normalizer)
+@@ -96,10 +104,6 @@ class AMPOnPolicyRunner(AmpOnPolicyRunner):
+       **_onnx_export_kwargs_single_file(),
+     )
+     _inline_external_onnx_data(os.path.join(path, filename))
+-    # move policy back to training device
+-    policy.to(self.device)
+-    if obs_normalizer is not None:
+-      obs_normalizer.to(self.device)
+ 
+   def save(self, path: str, infos=None):
+     super().save(path, infos)

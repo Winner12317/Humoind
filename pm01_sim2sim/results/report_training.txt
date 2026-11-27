@@ -1,0 +1,31 @@
+
+PM01 sim2sim, training physics (5 ms steps)
+
+walk segment           command vx vy wz      measured vx vy wz              |error|  fell  torque limit
+stand                 +0.00 +0.00 +0.00      +0.01 -0.00 -0.07       0.01 0.00 0.07  no      0.0 %
+forward 0.5           +0.50 +0.00 +0.00      +0.29 -0.02 +0.00       0.21 0.06 0.04  no      0.7 %
+forward 1.0           +1.00 +0.00 +0.00      +0.88 -0.00 -0.05       0.14 0.07 0.13  no      1.0 %
+forward 1.5           +1.50 +0.00 +0.00      +1.33 +0.03 +0.07       0.18 0.06 0.22  no      0.0 %
+stop                  +0.00 +0.00 +0.00      +0.02 +0.00 -0.05       0.02 0.00 0.05  no      0.0 %
+backward 0.5          -0.50 +0.00 +0.00      -0.51 +0.02 +0.00       0.04 0.07 0.07  no      0.0 %
+left 0.4              +0.00 +0.40 +0.00      -0.00 +0.01 +0.03       0.00 0.39 0.03  no      0.0 %
+right 0.4             +0.00 -0.40 +0.00      -0.02 -0.08 -0.02       0.03 0.32 0.05  no      0.0 %
+turn left 0.8         +0.00 +0.00 +0.80      -0.00 -0.01 +0.13       0.01 0.01 0.67  no      0.0 %
+turn right 0.8        +0.00 +0.00 -0.80      +0.00 +0.01 -0.08       0.01 0.01 0.72  no      0.0 %
+arc 0.6 / 0.5         +0.60 +0.00 +0.50      +0.57 +0.01 +0.26       0.06 0.06 0.24  no      0.0 %
+stand                 +0.00 +0.00 +0.00      +0.01 -0.00 -0.04       0.01 0.00 0.04  no      0.0 %
+
+get up from lying: 7/8 poses, 1.02 s on average (max 1.38 s)
+  tempo until standing: base rises at up to 1.43 m/s on average (max 2.04); joint speed p95 7.5, max 25.0 rad/s
+  pose 1: stood up after 1.16 s, peak rise 1.56 m/s, peak joint speed 14.7 rad/s
+  pose 2: stood up after 1.38 s, peak rise 1.57 m/s, peak joint speed 25.0 rad/s
+  pose 3: did NOT stand up
+  pose 4: stood up after 0.78 s, peak rise 2.04 m/s, peak joint speed 18.2 rad/s
+  pose 5: stood up after 0.72 s, peak rise 1.39 m/s, peak joint speed 19.8 rad/s
+  pose 6: stood up after 1.06 s, peak rise 1.11 m/s, peak joint speed 23.3 rad/s
+  pose 7: stood up after 1.20 s, peak rise 1.06 m/s, peak joint speed 15.3 rad/s
+  pose 8: stood up after 0.84 s, peak rise 1.25 m/s, peak joint speed 14.4 rad/s
+
+pushes while walking at 0.5 m/s: 10 pushes, 0 falls, stood up again 0 times, upright at the end: True
+
+(6.3 s wall time)
