@@ -3,8 +3,17 @@
 The full protocol copies source arrays, ten-family proportions, complete
 difficulty, family borders/platforms, origins and target sampling. Its physical
 geometry uses 5cm MuJoCo heightfields plus actual yaw-rotated boxes; full WM
-queries follow those triangles/boxes. PhysX steep-slope vertex displacement
-cannot be represented by a MuJoCo heightfield and remains documented.
+height and ray queries follow those triangles/boxes. PhysX steep-slope vertex
+displacement cannot be represented by a MuJoCo heightfield, so collision keeps
+one-cell ramps where Hiking has vertical risers. From training version 4 the
+edge cylinders are nevertheless detected on Hiking's own vertical-riser mesh,
+rebuilt from the same height arrays (see hiking_geometry.py).
+
+Two options narrow that remaining gap for real-robot training. A 2.5cm
+collision grid samples the upper surface of Hiking's mesh, halving every
+ramp; ``depth_source_mesh`` adds that mesh itself as non-colliding geometry
+that the depth camera sees in place of the heightfield (true vertical
+risers), while the heightfield moves to a collision-only geom group.
 
 Historical protocols retain their independent 10cm collision arrays, added
 spawn pad, rasterized boxes and optional conservative seven-family walking
@@ -32,6 +41,10 @@ HIKING_PROPORTIONS = {
     "pyramid_stairs_inv": .15, "pyramid_stairs_inv_high": .10,
     "boxes": .10, "mesh_boxes": .10, "hf_pyramid_slope_inv": .10,
 }
+# With ``depth_source_mesh`` the collision heightfields leave ray group 0, so
+# the depth camera (groups 0 and 2) sees Hiking's mesh and the boxes instead.
+HIKING_COLLISION_ONLY_GROUP = 4
+HIKING_COLLISION_SCALES = (.05, .025)
 WALKING_EXCLUDED_FAMILIES = frozenset(("square_gaps","pyramid_stairs_high","pyramid_stairs_inv_high"))
 _WALKING_WEIGHT_SUM = sum(weight for name,weight in HIKING_PROPORTIONS.items() if name not in WALKING_EXCLUDED_FAMILIES)
 WALKING_TERRAIN_PROPORTIONS = {
@@ -153,6 +166,7 @@ class HikingTerrainCfg(SubTerrainCfg):
     recovery_pad_width: float = 1.5
     maximum_difficulty: float = 1.
     task_protocol: str = "legacy_walk_turn_v1"
+    depth_source_mesh: bool = False
 
     def function(self, difficulty, spec, rng):
         if self.task_protocol=="hiking_full_v1":
@@ -259,15 +273,55 @@ def _hiking_patch_height_numpy(height,xy,size,boxes):
 
 def _hiking_full_terrain(cfg,difficulty,spec,rng):
     from .hiking_terrain_source import source_height_array,source_rotated_boxes
+    from .hiking_geometry import isaaclab_height_field_mesh,source_mesh_height_grid
     height,origin=source_height_array(cfg.family,difficulty,rng,cfg.size,cfg.horizontal_scale,cfg.vertical_scale)
-    low,high=float(height.min()),float(height.max());span=max(high-low,.005)
-    name="hiking_full_"+uuid.uuid4().hex
+    refine=int(round(cfg.horizontal_scale/cfg.collision_horizontal_scale))
+    if refine not in (1,2) or not math.isclose(cfg.horizontal_scale/cfg.collision_horizontal_scale,refine,abs_tol=1e-8):
+        raise ValueError("Full Hiking terrain collides on the source .05m grid or on a .025m refinement")
+    # The family is part of the name so terrain queries can rebuild Hiking's
+    # source mesh (the mesh-box ground is a flat box there, not a height field).
+    name=f"hiking_full_{cfg.family}_{uuid.uuid4().hex}"
+    # Hiking's mesh-box ground is a flat box; an all-level height array (zero
+    # difficulty roughness) is the same surface and has no mesh volume either.
+    flat_ground=cfg.family=="mesh_boxes" or float(height.max())==float(height.min())
+    collision=height;vertices=triangles=None
+    grid=np.rint(height.T/cfg.vertical_scale).astype(np.int64)  # source integers [x,y]
+    if (refine>1 or cfg.depth_source_mesh) and not flat_ground:
+        vertices,triangles=isaaclab_height_field_mesh(grid,cfg.horizontal_scale,cfg.vertical_scale)
+    if refine>1:
+        shape=tuple((n-1)*refine+1 for n in height.shape)
+        if cfg.family!="mesh_boxes":
+            # Edge detection still needs the exact source integers; the refined
+            # surface is a resampling of the mesh, not of this array.
+            spec.add_numeric(name=name,size=grid.size,data=grid.flatten().astype(np.float64).tolist())
+        if flat_ground:
+            collision=np.full(shape,height.flat[0],dtype=np.float32)
+        else:
+            fallback=np.repeat(np.repeat(grid,refine,0),refine,1)[:shape[1],:shape[0]]*cfg.vertical_scale
+            collision=source_mesh_height_grid(vertices,triangles,shape[::-1],cfg.horizontal_scale/refine,
+                                              fallback).T.astype(np.float32)
+    low,high=float(collision.min()),float(collision.max());span=max(high-low,.005)
     field=spec.add_hfield(name=name,size=[cfg.size[0]/2,cfg.size[1]/2,span,1.],
-        nrow=height.shape[0],ncol=height.shape[1],userdata=((height-low)/span).flatten().tolist())
+        nrow=collision.shape[0],ncol=collision.shape[1],userdata=((collision-low)/span).flatten().tolist())
     body=spec.body("terrain")
     geom=body.add_geom(type=mujoco.mjtGeom.mjGEOM_HFIELD,hfieldname=name,
-        pos=[cfg.size[0]/2,cfg.size[1]/2,low],group=0)
+        pos=[cfg.size[0]/2,cfg.size[1]/2,low],
+        group=HIKING_COLLISION_ONLY_GROUP if cfg.depth_source_mesh else 0)
     geometries=[TerrainGeometry(geom=geom,hfield=field,color=(.45,.5,.48,1.))]
+    if cfg.depth_source_mesh:
+        # What the depth camera sees instead of the heightfield: Hiking's own
+        # terrain mesh (or its flat mesh-box ground), without any collision.
+        if flat_ground:
+            seen=body.add_geom(type=mujoco.mjtGeom.mjGEOM_BOX,size=[cfg.size[0]/2,cfg.size[1]/2,.5],
+                pos=[cfg.size[0]/2,cfg.size[1]/2,float(height.flat[0])-.5],contype=0,conaffinity=0,group=0)
+        else:
+            # An open, nearly flat surface encloses no volume; shell inertia
+            # keeps MuJoCo's mesh compiler from rejecting it (the geom is static).
+            spec.add_mesh(name=name,uservert=vertices.astype(np.float64).flatten().tolist(),
+                          userface=triangles.flatten().tolist(),inertia=mujoco.mjtMeshInertia.mjMESH_INERTIA_SHELL)
+            seen=body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH,meshname=name,pos=[0.,0.,0.],
+                               contype=0,conaffinity=0,group=0)
+        geometries.append(TerrainGeometry(geom=seen,color=(.45,.5,.48,1.)))
     boxes=source_rotated_boxes(difficulty,rng,cfg.size) if cfg.family=="mesh_boxes" else []
     for axis,direction in ((0,-1),(0,1),(1,-1),(1,1)):
         if rng.random()>=cfg.wall_probability:continue
@@ -305,7 +359,8 @@ def _hiking_full_terrain(cfg,difficulty,spec,rng):
 
 
 def hiking_terrain_generator(seed=0, rows=10, cols=20, recovery_flat_fraction=None,
-                            collision_horizontal_scale=.1,walking_only=False,task_protocol="legacy_walk_turn_v1"):
+                            collision_horizontal_scale=.1,walking_only=False,task_protocol="legacy_walk_turn_v1",
+                            depth_source_mesh=False):
     """Generate original joint-task terrain or a conservative walking profile.
 
     The walking profile retains roughness, ordinary stairs, boxes and slopes,
@@ -322,11 +377,17 @@ def hiking_terrain_generator(seed=0, rows=10, cols=20, recovery_flat_fraction=No
         # terrains. MuJoCo uses the source .05m height grid plus convex boxes;
         # PhysX's steep-slope vertex displacement is an explicit engine limit.
         patches={"target":FlatPatchSamplingCfg(num_patches=50,patch_radius=.2,max_height_diff=.05)}
+        # Historical callers pass the coarse default; only an explicit .025m
+        # request refines the full task's source grid.
+        full_scale=.025 if math.isclose(collision_horizontal_scale,.025,abs_tol=1e-10) else .05
         return TerrainGeneratorCfg(seed=seed,size=(8.,8.),border_width=3.,num_rows=rows,num_cols=cols,
             curriculum=True,color_scheme="none",sub_terrains={
                 name:HikingTerrainCfg(family=name,size=(8.,8.),proportion=proportion,flat_patch_sampling=patches,
-                    collision_horizontal_scale=.05,recovery_pad_width=0.,maximum_difficulty=1.,task_protocol=task_protocol)
+                    collision_horizontal_scale=full_scale,recovery_pad_width=0.,maximum_difficulty=1.,
+                    task_protocol=task_protocol,depth_source_mesh=depth_source_mesh)
                 for name,proportion in HIKING_PROPORTIONS.items()})
+    if depth_source_mesh:
+        raise ValueError("The Hiking depth mesh exists only for the full Hiking terrain")
     if recovery_flat_fraction is None:recovery_flat_fraction=0. if walking_only else .25
     if not 0 <= recovery_flat_fraction < 1:
         raise ValueError("recovery_flat_fraction must lie in [0,1)")
@@ -393,12 +454,19 @@ class TerrainHeightField:
         self.edge_distances=torch.as_tensor(np.stack(distance),device=heights.device,dtype=heights.dtype)
 
     @classmethod
-    def from_model(cls,model,device="cpu"):
-        values=[];centers=[];sizes=[];base_boxes=[];terrain_body_ids=set();full=False
+    def from_model(cls,model,device="cpu",source_mesh_edges=False):
+        """Decode terrain queries from a compiled model.
+
+        ``source_mesh_edges`` selects where the full task's edge cylinders are
+        detected: on Hiking's own vertical-riser terrain mesh (training
+        version 4) or on the MuJoCo heightfield triangles (earlier versions).
+        """
+        values=[];centers=[];sizes=[];base_boxes=[];terrain_body_ids=set();full=False;names=[]
         for gid in range(model.ngeom):
             if int(model.geom_type[gid])!=int(mujoco.mjtGeom.mjGEOM_HFIELD):continue
             fid=int(model.geom_dataid[gid]);start=int(model.hfield_adr[fid]);ny=int(model.hfield_nrow[fid]);nx=int(model.hfield_ncol[fid])
-            full|="hiking_full_" in (mujoco.mj_id2name(model,mujoco.mjtObj.mjOBJ_HFIELD,fid) or "")
+            names.append(mujoco.mj_id2name(model,mujoco.mjtObj.mjOBJ_HFIELD,fid) or "")
+            full|="hiking_full_" in names[-1]
             terrain_body_ids.add(int(model.geom_bodyid[gid]))
             array=np.array(model.hfield_data[start:start+nx*ny]).reshape(ny,nx)
             # Generated terrain body has identity pose; local positions already
@@ -415,21 +483,50 @@ class TerrainHeightField:
         if full:
             from .hiking_geometry import heightfield_mesh,sharp_edges,HikingEdgeCylinders,HikingBoxRays
             import trimesh
-            edges=[];boxes=[]
-            for index,(height,center,size) in enumerate(zip(values,centers,sizes)):
-                edges.append(sharp_edges(heightfield_mesh(height,center,size),seed=index))
+            from .hiking_geometry import hiking_source_mesh_edges
+            edges=[];boxes=[];source_boxes=[]
+            if not source_mesh_edges:
+                for index,(height,center,size) in enumerate(zip(values,centers,sizes)):
+                    edges.append(sharp_edges(heightfield_mesh(height,center,size),seed=index))
             for gid in range(model.ngeom):
                 if (int(model.geom_bodyid[gid]) not in terrain_body_ids or
                     int(model.geom_type[gid])!=int(mujoco.mjtGeom.mjGEOM_BOX)):
                     continue
+                # Depth-only geometry (the flat mesh-box ground) is not terrain to stand on.
+                if not (model.geom_contype[gid] or model.geom_conaffinity[gid]):continue
                 q=model.geom_quat[gid]
                 if abs(q[1])+abs(q[2])>1e-6:raise ValueError("Hiking terrain boxes must rotate around world z only")
                 yaw=2*np.arctan2(q[3],q[0]);position=model.geom_pos[gid].copy();half=model.geom_size[gid].copy()
                 boxes.append((*position,*half,yaw))
+                if source_mesh_edges:
+                    # The generator's outer border (top at z=0) keeps only its
+                    # top faces in the source mesh and contributes no edge.
+                    if position[2]+half[2]>1e-9:source_boxes.append((*position,*half,yaw))
+                    continue
                 transform=trimesh.transformations.quaternion_matrix(q)
                 transform[:3,3]=position
                 mesh=trimesh.creation.box(extents=half*2,transform=transform)
                 edges.append(sharp_edges(mesh,seed=gid))
+            if source_mesh_edges:
+                tiles=[]
+                for name,height,center,size in zip(names,values,centers,sizes):
+                    if not np.allclose(size,4.):
+                        raise ValueError("Hiking source-mesh edges require the 8 m task terrain")
+                    stored=mujoco.mj_name2id(model,mujoco.mjtObj.mjOBJ_NUMERIC,name)
+                    if name.startswith("hiking_full_mesh_boxes_"):
+                        grid=None
+                    elif stored>=0:
+                        # A refined collision grid keeps its source integers [x,y] beside it.
+                        start=int(model.numeric_adr[stored])
+                        grid=np.rint(model.numeric_data[start:start+int(model.numeric_size[stored])]).astype(
+                            np.int64).reshape(161,161)
+                    elif height.shape==(161,161):
+                        # Height arrays are stored (y,x) in metres; the source grid is integer [x,y].
+                        grid=np.rint(height.T/.005).astype(np.int64)
+                    else:
+                        raise ValueError("Hiking source-mesh edges require the source 0.05 m height grid")
+                    tiles.append((grid,center-size,2*size))
+                edges.append(hiking_source_mesh_edges(tiles,source_boxes))
             result.exact_triangles=True
             # mj_rayHfield also intersects its base box. Retain it for rays
             # starting below a surface, not just the usual +20m foot rays.
@@ -441,7 +538,8 @@ class TerrainHeightField:
     def from_env(cls,env):
         cached=getattr(env,"_perceptive_terrain_oracle",None)
         if cached is None:
-            cached=cls.from_model(env.sim.mj_model,device=env.device)
+            cached=cls.from_model(env.sim.mj_model,device=env.device,
+                source_mesh_edges=getattr(env.cfg,"_hiking_training_version",1)>=4)
             env._perceptive_terrain_oracle=cached
         return cached
 

@@ -296,9 +296,16 @@ def hiking_tracking_terrain_curriculum(env,env_ids,command_name="twist",
     yaw=command.metrics["tracking_exp_vel_yaw"][env_ids]
     up=(xy>lin_vel_threshold[1])&(yaw>ang_vel_threshold[1])
     down=(xy<lin_vel_threshold[0])&~up
-    # mjlab calls curricula during the explicit initial reset as well. That is
-    # initialization, unlike IsaacLab's post-episode curriculum callback.
+    # mjlab calls curricula during the explicit initial reset as well. Up to
+    # training version 3 that call is ignored. IsaacLab's first env.reset() does
+    # run the curriculum, with tracking scores still zero, so Hiking starts every
+    # robot one level below its sampled one; version 4 reproduces that once.
     active=env.episode_length_buf[env_ids]>0
+    if (getattr(getattr(env,"cfg",None),"_hiking_training_version",1)>=4
+            and not getattr(env,"_hiking_initial_curriculum_applied",False)
+            and int(env.common_step_counter)==0):
+        env._hiking_initial_curriculum_applied=True
+        active=torch.ones_like(active)
     env.scene.terrain.update_env_origins(env_ids,up&active,down&active)
     return env.scene.terrain.terrain_levels.float().mean()
 

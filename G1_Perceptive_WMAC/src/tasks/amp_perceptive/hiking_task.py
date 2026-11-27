@@ -25,15 +25,28 @@ def configure_hiking_task(cfg,*,play=False):
     from src.wmac_perceptive.hiking_observations import configure_hiking_observations
     from .commands import hiking_tracking_terrain_curriculum
     source_robot = getattr(cfg, "_hiking_training_version", 1) >= 3
+    variant = getattr(cfg, "_hiking_robot_variant", "unshod")
+    if variant not in ("unshod", "shoe") or (variant == "shoe" and not source_robot):
+        raise ValueError(f"Unsupported Hiking robot variant: {variant!r}")
     if source_robot:
-        from .hiking_robot import get_hiking_robot_spec
-        cfg.scene.entities["robot"].spec_fn = get_hiking_robot_spec
+        from .hiking_robot import HIKING_SHOE_SOLE_OFFSET, get_hiking_robot_spec, get_hiking_shoe_robot_spec
+        cfg.scene.entities["robot"].spec_fn = (
+            get_hiking_shoe_robot_spec if variant == "shoe" else get_hiking_robot_spec)
+        if variant == "shoe":
+            # The model's rest keyframe stands on the soles, which are 23 mm
+            # lower; without this the compiled rest pose starts inside the ground.
+            from dataclasses import replace
+            robot = cfg.scene.entities["robot"]
+            x, y, z = robot.init_state.pos
+            robot.init_state = replace(robot.init_state, pos=(x, y, z + HIKING_SHOE_SOLE_OFFSET))
         cfg.scene.env_spacing = 2.5
         # The single all-body Hiking contact sensor supplies the measured
         # forces and timers used by every contact reward, label and reset.
         cfg.scene.sensors = tuple(sensor for sensor in cfg.scene.sensors
                                   if sensor.name not in ("feet_ground_contact", "self_collision"))
-    configure_hiking_actuators(cfg)
+    # G1ParkourEnvCfg replaces the robot after the delayed actuators were
+    # assigned, so the shod task runs without actuator delay.
+    configure_hiking_actuators(cfg, max_delay_substeps=0 if variant == "shoe" else 2)
     configure_hiking_observations(cfg)
     from .hiking_resets import configure_hiking_resets
     configure_hiking_resets(cfg)

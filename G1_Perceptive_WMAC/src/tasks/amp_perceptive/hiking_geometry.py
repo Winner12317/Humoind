@@ -3,10 +3,17 @@
 Greedy concatenation is adapted from project-instinct/InstinctLab
  de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057, edge_cylinder.py (CC-BY-NC-4.0).
 The 70-degree mesh adjacency threshold, 30-degree continuation, original
-0.05m line-fit tolerance and min_points=2 are retained. Unlike a raster edge
-proxy, detection uses actual heightfield triangles and rotated box meshes.
-MuJoCo cannot reproduce PhysX steep-slope vertex displacement; these queries
-therefore follow the physical MuJoCo geometry without shifting invisible edges.
+0.05m line-fit tolerance and min_points=2 are retained.
+
+Two edge sources exist. Training version 4 (``hiking_source_mesh_edges``)
+detects edges on Hiking's own terrain mesh: IsaacLab's height-field mesh with
+``slope_threshold=1`` (every rise steeper than 45 degrees becomes a vertical
+face), walls, rotated boxes and the flat mesh-box ground, concatenated and
+merged exactly as InstinctLab's TerrainImporter does before detection. Versions
+up to 3 (``sharp_edges`` on ``heightfield_mesh``) detect on the MuJoCo
+heightfield triangles, whose one-cell ramps fall below the 70-degree threshold
+for rises under about 0.14 m. Collision and ray queries follow the MuJoCo
+geometry in every version: a heightfield cannot hold a vertical face.
 """
 from __future__ import annotations
 from types import SimpleNamespace
@@ -35,6 +42,172 @@ def sharp_edges(mesh,seed=0):
     points=mesh.vertices[selected].reshape(-1,6)
     settings=SimpleNamespace(cfg=SimpleNamespace(adjacent_angle_threshold=30.,min_points=2),rng=random.Random(seed))
     return merge_sharp_edges(settings,points).reshape(-1,6)
+
+
+def isaaclab_height_field_mesh(height_field, horizontal_scale=.05, vertical_scale=.005, slope_threshold=1.):
+    """IsaacLab f73c331 ``convert_height_field_to_mesh`` (BSD-3-Clause).
+
+    ``height_field`` is the integer array indexed [x, y]. Vertices keep the
+    source float32 precision and tile-local coordinates; triangle order and
+    the 00-to-11 diagonal are the source's.
+    """
+    hf = np.asarray(height_field)
+    num_rows, num_cols = hf.shape
+    y = np.linspace(0, (num_cols - 1) * horizontal_scale, num_cols)
+    x = np.linspace(0, (num_rows - 1) * horizontal_scale, num_rows)
+    yy, xx = np.meshgrid(y, x)
+    if slope_threshold is not None:
+        threshold = slope_threshold * horizontal_scale / vertical_scale
+        move_x = np.zeros((num_rows, num_cols))
+        move_y = np.zeros((num_rows, num_cols))
+        move_corners = np.zeros((num_rows, num_cols))
+        move_x[: num_rows - 1, :] += hf[1:num_rows, :] - hf[: num_rows - 1, :] > threshold
+        move_x[1:num_rows, :] -= hf[: num_rows - 1, :] - hf[1:num_rows, :] > threshold
+        move_y[:, : num_cols - 1] += hf[:, 1:num_cols] - hf[:, : num_cols - 1] > threshold
+        move_y[:, 1:num_cols] -= hf[:, : num_cols - 1] - hf[:, 1:num_cols] > threshold
+        move_corners[: num_rows - 1, : num_cols - 1] += (
+            hf[1:num_rows, 1:num_cols] - hf[: num_rows - 1, : num_cols - 1] > threshold)
+        move_corners[1:num_rows, 1:num_cols] -= (
+            hf[: num_rows - 1, : num_cols - 1] - hf[1:num_rows, 1:num_cols] > threshold)
+        xx = xx + (move_x + move_corners * (move_x == 0)) * horizontal_scale
+        yy = yy + (move_y + move_corners * (move_y == 0)) * horizontal_scale
+    vertices = np.zeros((num_rows * num_cols, 3), dtype=np.float32)
+    vertices[:, 0] = xx.flatten()
+    vertices[:, 1] = yy.flatten()
+    vertices[:, 2] = hf.flatten() * vertical_scale
+    ind0 = (np.arange(num_rows - 1)[:, None] * num_cols + np.arange(num_cols - 1)[None]).reshape(-1)
+    ind1, ind2, ind3 = ind0 + 1, ind0 + num_cols, ind0 + num_cols + 1
+    triangles = np.stack((np.stack((ind0, ind3, ind1), -1), np.stack((ind0, ind2, ind3), -1)), 1).reshape(-1, 3)
+    return vertices, triangles
+
+
+def source_mesh_height_grid(vertices, triangles, shape, spacing, fallback=None):
+    """Upper surface of a height-field mesh at the points (i*spacing, j*spacing).
+
+    Returns heights indexed [x, y]. A sample that lies on a vertical riser takes
+    the riser's top, so a plateau keeps its full source extent and the drop
+    happens within the next ``spacing``. Every triangle is rasterized with its
+    edges included; vertical and collapsed faces have no area and are covered by
+    their neighbours. ``fallback`` [x, y] supplies samples no triangle covers
+    (a tile-border vertex displaced inwards leaves such a strip upstream).
+    """
+    nx, ny = shape
+    corners = np.asarray(vertices, dtype=np.float64)[np.asarray(triangles)]
+    xy, z = corners[..., :2] / spacing, corners[..., 2]
+    # Source vertices are float32 multiples of the grid spacing; snap them so a
+    # sample exactly on a triangle's edge or corner is not lost to rounding.
+    snapped = np.rint(xy)
+    xy = np.where(np.abs(xy - snapped) < 1e-3, snapped, xy)
+    (x0, y0), (x1, y1), (x2, y2) = (xy[:, k].T for k in range(3))
+    area = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+    keep = np.abs(area) > 1e-9
+    xy, z, area = xy[keep], z[keep], area[keep]
+    (x0, y0), (x1, y1), (x2, y2) = (xy[:, k].T for k in range(3))
+    tolerance = 1e-6
+    low = np.ceil(xy.min(1) - tolerance).astype(np.int64)
+    span = np.floor(xy.max(1) + tolerance).astype(np.int64) - low + 1
+    heights = np.full((nx, ny), -np.inf)
+    for dx in range(int(span[:, 0].max())):
+        for dy in range(int(span[:, 1].max())):
+            ix, iy = low[:, 0] + dx, low[:, 1] + dy
+            px, py = ix.astype(np.float64), iy.astype(np.float64)
+            w0 = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / area
+            w1 = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / area
+            w2 = 1. - w0 - w1
+            inside = ((dx < span[:, 0]) & (dy < span[:, 1]) & (ix >= 0) & (ix < nx) & (iy >= 0) & (iy < ny)
+                      & (w0 >= -tolerance) & (w1 >= -tolerance) & (w2 >= -tolerance))
+            value = w0 * z[:, 0] + w1 * z[:, 1] + w2 * z[:, 2]
+            np.maximum.at(heights, (ix[inside], iy[inside]), value[inside])
+    missing = np.isneginf(heights)
+    if missing.any():
+        if fallback is None:
+            raise ValueError("The mesh does not cover every grid sample")
+        heights[missing] = np.asarray(fallback, dtype=np.float64)[missing]
+    return heights
+
+
+def hiking_source_terrain_mesh(tiles, boxes):
+    """Hiking's merged terrain mesh, as InstinctLab's TerrainImporter sees it.
+
+    ``tiles`` holds (integer heights [x, y] or None for the flat mesh-box
+    ground, tile corner xy, tile size xy); ``boxes`` holds world-frame rows
+    (centre xyz, half-size xyz, yaw) for walls and rotated boxes. The outer
+    border is omitted: only its top faces survive upstream and they add no
+    edge. Each part is built with the source trimesh call, so duplicate
+    vertices, zero-thickness faces and shared wall corners merge as upstream.
+    """
+    parts = []
+    for heights, corner, size in tiles:
+        if heights is None:
+            # random_multi_box_terrain without Perlin ground: a zero-height box.
+            mesh = trimesh.creation.box((size[0], size[1], 0.), trimesh.transformations.translation_matrix(
+                (.5 * size[0], .5 * size[1], 0.)))
+        else:
+            vertices, triangles = isaaclab_height_field_mesh(heights)
+            mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
+        mesh.apply_translation((corner[0], corner[1], 0.))
+        parts.append(mesh)
+    for x, y, z, hx, hy, hz, yaw in boxes:
+        transform = trimesh.transformations.translation_matrix((x, y, z)) @ trimesh.transformations.rotation_matrix(
+            yaw, (0, 0, 1))
+        parts.append(trimesh.creation.box(extents=(2 * hx, 2 * hy, 2 * hz), transform=transform))
+    mesh = trimesh.util.concatenate(parts)
+    # TerrainImporter.import_mesh, InstinctLab de6b92f.
+    mesh.merge_vertices()
+    mesh.update_faces(mesh.unique_faces())
+    mesh.remove_unreferenced_vertices()
+    return mesh
+
+
+def _sharp_edge_coordinates(mesh, angle_threshold=70., prune=True):
+    """Vertex coordinates [n, 6] of mesh edges whose face angle exceeds the threshold.
+
+    Two faces both tilted at most 35 degrees from +z cannot meet at more than
+    70 degrees, so only faces steeper than that (or degenerate, whose zero
+    normal trimesh scores as 90 degrees) and the faces touching them need
+    adjacency. Every edge of a steep face keeps all its incident faces, so the
+    pruned result equals the full-mesh one, including edges trimesh drops for
+    having more than two faces.
+    """
+    if prune:
+        steep = ~(mesh.face_normals[:, 2] >= math.cos(math.radians(angle_threshold / 2.)) + 1e-9)
+        if not steep.any():
+            return np.empty((0, 6))
+        touched = np.zeros(len(mesh.vertices), dtype=bool)
+        touched[mesh.faces[steep].reshape(-1)] = True
+        mesh = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces[touched[mesh.faces].any(1)], process=False)
+    selected = mesh.face_adjacency_edges[mesh.face_adjacency_angles > np.deg2rad(angle_threshold)]
+    if not len(selected):
+        return np.empty((0, 6))
+    return np.asarray(mesh.vertices)[selected].reshape(-1, 6)
+
+
+def _merge_by_component(edge_coords, seed=0):
+    """Greedy concatenation, one connected group of sharp edges at a time.
+
+    Chains never leave a connected group, so this equals the source's single
+    pass over all edges up to its unseeded random start vertices, without
+    rebuilding the list of every remaining vertex for each chain.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    if not len(edge_coords):
+        return np.empty((0, 6), dtype=np.float32)
+    points, inverse = np.unique(edge_coords.reshape(-1, 3), axis=0, return_inverse=True)
+    pairs = inverse.reshape(-1, 2)
+    graph = coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), shape=(len(points),) * 2)
+    _, labels = connected_components(graph, directed=False)
+    edge_labels = labels[pairs[:, 0]]
+    order = np.argsort(edge_labels, kind="stable")
+    bounds = np.flatnonzero(np.diff(edge_labels[order])) + 1
+    settings = SimpleNamespace(cfg=SimpleNamespace(adjacent_angle_threshold=30., min_points=2), rng=random.Random(seed))
+    merged = [merge_sharp_edges(settings, edge_coords[group]).reshape(-1, 6) for group in np.split(order, bounds)]
+    return np.concatenate(merged, axis=0).astype(np.float32)
+
+
+def hiking_source_mesh_edges(tiles, boxes, seed=0):
+    """Hiking's edge cylinders [n, 6]: GreedyconcatEdgeCylinder on the source terrain mesh."""
+    return _merge_by_component(_sharp_edge_coordinates(hiking_source_terrain_mesh(tiles, boxes)), seed=seed)
 
 
 class SpatialCandidates2D:

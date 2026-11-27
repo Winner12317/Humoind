@@ -44,13 +44,13 @@ class AMPLoader:
             raise ValueError("expert_recovery_fraction must be between zero and one")
         self.expert_recovery_fraction = expert_recovery_fraction
 
-        # 检查是文件还是文件夹
+        # Accept a single motion file or a directory.
         if os.path.isfile(motion_file):
-            # 单个文件的情况（保持向后兼容）
+            # Keep support for loading a single file.
             motion_files = [motion_file]
             motion_names = [os.path.splitext(os.path.basename(motion_file))[0]]
         elif os.path.isdir(motion_file):
-            # 文件夹的情况：递归查找所有子目录下的 .npz 文件
+            # Find .npz files recursively under the motion directory.
             motion_names = []
             motion_files = []
             for root, _dirs, files in os.walk(motion_file):
@@ -64,7 +64,7 @@ class AMPLoader:
         else:
             raise ValueError(f"Path is neither a file nor a directory: {motion_file}")
         
-        # 存储所有motion的数据列表
+        # Store data for all motion clips.
         self.motion_names = motion_names
         if feature_schema != LEGACY_SCHEMA:
             self._load_grounded_pairs(motion_files, all_names_list, device)
@@ -75,7 +75,7 @@ class AMPLoader:
         self._body_lin_vel_b_list = []
         self._body_ang_vel_b_list = []
         
-        # 处理每个motion文件
+        # Process each motion file.
         for motion_idx, (motion_name, motion_path) in enumerate(zip(motion_names, motion_files)):
             print(f"Processing motion {motion_idx+1}/{len(motion_files)}: {motion_name}")
             data = np.load(motion_path)
@@ -92,16 +92,16 @@ class AMPLoader:
             
             time_step_total = _dof_pos.shape[0]
             
-            # 为当前motion初始化存储
+            # Allocate storage for this clip.
             _body_pos_b = torch.zeros((time_step_total, self._num_bodies, 3), dtype=torch.float32, device=device)
             _body_quat_b = torch.zeros((time_step_total, self._num_bodies, 4), dtype=torch.float32, device=device)
             _body_ori_b = torch.zeros((time_step_total, self._num_bodies, 6), dtype=torch.float32, device=device)
             _body_lin_vel_b = torch.zeros((time_step_total, self._num_bodies, 3), dtype=torch.float32, device=device)
             _body_ang_vel_b = torch.zeros((time_step_total, self._num_bodies, 3), dtype=torch.float32, device=device)
             
-            # 处理所有帧
+            # Process every frame.
             for frame_idx in tqdm(range(time_step_total), desc=f"Preloading AMP data for {motion_name}"):
-                # 获取当前帧的anchor和body数据
+                # Read the anchor and body states for this frame.
                 tgt_anchor_pos_w = _body_pos_w[frame_idx, self._anchor_indexes, :].squeeze().unsqueeze(0).repeat(self._num_bodies, 1)
                 tgt_anchor_quat_w = _body_quat_w[frame_idx, self._anchor_indexes, :].squeeze().unsqueeze(0).repeat(self._num_bodies, 1)
                 tgt_body_pos_w = _body_pos_w[frame_idx, self._body_indexes, :]
@@ -109,7 +109,7 @@ class AMPLoader:
                 tgt_body_lin_vel_w = _body_lin_vel_w[frame_idx, self._body_indexes, :]
                 tgt_body_ang_vel_w = _body_ang_vel_w[frame_idx, self._body_indexes, :]
 
-                # 计算body相对于anchor的位置和姿态 (局部坐标系)
+                # Express body positions and orientations in the anchor frame.
                 tgt_robot_body_pos_b, tgt_robot_body_quat_b = (
                     math_utils.subtract_frame_transforms(
                         tgt_anchor_pos_w,
@@ -119,11 +119,11 @@ class AMPLoader:
                     )
                 )
 
-                # 将姿态四元数转换为旋转矩阵的前两列
+                # Convert the orientation quaternion to the first two columns of the rotation matrix.
                 mat = math_utils.matrix_from_quat(tgt_robot_body_quat_b)
                 tgt_robot_body_ori_b = mat[..., :, :2].reshape(self._num_bodies, 6)
 
-                # 将速度转换到每个body自己的局部坐标系
+                # Express velocities in each body's local frame.
                 tgt_body_lin_vel_b = math_utils.quat_apply_inverse(
                     tgt_body_quat_w,
                     tgt_body_lin_vel_w,
@@ -134,21 +134,21 @@ class AMPLoader:
                     tgt_body_ang_vel_w,
                 )
 
-                # 存储当前帧的局部坐标系数据
+                # Store the local-frame data for this frame.
                 _body_pos_b[frame_idx] = tgt_robot_body_pos_b
                 _body_quat_b[frame_idx] = tgt_robot_body_quat_b
                 _body_ori_b[frame_idx] = tgt_robot_body_ori_b
                 _body_lin_vel_b[frame_idx] = tgt_body_lin_vel_b
                 _body_ang_vel_b[frame_idx] = tgt_body_ang_vel_b
             
-            # 将当前motion的数据添加到列表
+            # Append the processed clip.
             self._body_pos_b_list.append(_body_pos_b)
             self._body_quat_b_list.append(_body_quat_b)
             self._body_ori_b_list.append(_body_ori_b)
             self._body_lin_vel_b_list.append(_body_lin_vel_b)
             self._body_ang_vel_b_list.append(_body_ang_vel_b)
         
-        # 为了向后兼容，使用第一个motion的数据作为默认值
+        # Use the first clip as the default for existing callers.
         self.time_step_total = self._body_pos_b_list[0].shape[0]
         self.motion_total_time = self.time_step_total / self.fps
         self._body_pos_b = self._body_pos_b_list[0]
@@ -215,17 +215,17 @@ class AMPLoader:
         num_motions = len(self._body_pos_b_list)
         
         for batch_idx in range(num_mini_batch):
-            # 按顺序循环选择motion文件
+            # Cycle through motion files in order.
             motion_idx = batch_idx % num_motions
             
-            # 获取当前motion的数据
+            # Read the current motion clip.
             current_body_pos_b = self._body_pos_b_list[motion_idx]
             current_body_ori_b = self._body_ori_b_list[motion_idx]
             current_body_lin_vel_b = self._body_lin_vel_b_list[motion_idx]
             current_body_ang_vel_b = self._body_ang_vel_b_list[motion_idx]
             current_time_step_total = current_body_pos_b.shape[0]
             
-            # 从当前motion中随机采样
+            # Sample frames at random from the current clip.
             idxs = torch.randint(0, current_time_step_total, (mini_batch_size,), device=current_body_pos_b.device)
             idxs = torch.clamp(idxs, max=current_time_step_total - 1)
             

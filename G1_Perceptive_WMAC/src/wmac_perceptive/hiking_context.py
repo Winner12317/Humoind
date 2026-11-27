@@ -4,16 +4,24 @@ from __future__ import annotations
 import torch
 
 
-def normalize_hiking_sim_context(context):
-    """Normalize the static Hiking DR inputs using the sampled parameter ranges."""
+def normalize_hiking_sim_context(context, dynamics_columns=0):
+    """Normalize the static Hiking DR inputs using the sampled parameter ranges.
+
+    ``dynamics_columns`` trailing columns hold the optional robot-dynamics
+    randomization sample, already normalized to [-1, 1]; they pass through.
+    """
     # The mean foot coefficient occupies slot 0. The full per-geom vector
     # follows the 100 action/timer/kinematic protocol fields.
     lo, hi = .3, 1.6
     mean, scale = (lo + hi) / 2., (hi - lo) / 2.
+    end = context.shape[-1] - dynamics_columns
     # The actuator lags are sampled uniformly over 0, 1, 2 physics substeps.
-    return torch.cat(((context[..., :1] - mean) / scale, context[..., 1:67],
-                      context[..., 67:96] - 1., context[..., 96:100],
-                      (context[..., 100:] - mean) / scale), -1)
+    parts = ((context[..., :1] - mean) / scale, context[..., 1:67],
+             context[..., 67:96] - 1., context[..., 96:100],
+             (context[..., 100:end] - mean) / scale)
+    if dynamics_columns:
+        parts = (*parts, context[..., end:])
+    return torch.cat(parts, -1)
 
 
 def advance_hiking_context(context,action,auxiliary,*,camera_capture_steps=0):

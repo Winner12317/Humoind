@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-amp_hfield_action=--check
+# MuJoCo-Warp 3.8.1 drops heightfield foot-terrain contacts unless patched, and
+# training refuses that physics. Apply the fix by default; --keep-unpatched-hfield
+# reproduces the original audited (incorrect) environment.
+amp_hfield_action=--apply
 case "${1:-}" in
-  "") ;;
-  --apply-hfield-fix) amp_hfield_action=--apply ;;
-  *) echo 'Usage: bash reproduce/install.sh [--apply-hfield-fix]' >&2; exit 2 ;;
+  ""|--apply-hfield-fix) ;;
+  --keep-unpatched-hfield) amp_hfield_action=--check ;;
+  *) echo 'Usage: bash reproduce/install.sh [--keep-unpatched-hfield]' >&2; exit 2 ;;
 esac
 amp_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$amp_root"
@@ -46,8 +49,8 @@ target=Path(mjlab.__file__).parent/'managers/observation_manager.py'
 shutil.copyfile(source,target)
 print('Installed term/time history-ordering patch:',target)
 PY
-# Match the original audited environment by default: the 3.8.1 fix is
-# available but was not applied there. Opt in with --apply-hfield-fix.
+# Applied by default (see the top of this file). The audited environment was
+# unpatched; --keep-unpatched-hfield leaves it that way and only checks it.
 "$amp_python" scripts/fix_mujoco_warp_hfield.py "$amp_hfield_action"
 "$amp_python" -m pip check
 "$amp_python" - <<'PY'
@@ -59,11 +62,11 @@ print('Python:',sys.version)
 print('Torch:',torch.__version__,'GPU:',torch.cuda.get_device_name())
 print('Local AMP rsl_rl:',rsl_rl.__file__)
 PY
-# Current v3 source preparation is offline: verify/copy the exact official
-# raw walking release and reconstruct all13 historical local walking clips
-# from public-base NPZ assets. This also builds the actual default28-clip
-# expert pool and writes reproduce/reference-config.json. Historical standing
-# data remains included for explicitly selected legacy protocols.
+# Source preparation is offline: verify/copy the exact official raw walking
+# release (the version 4 default reference) and reconstruct the 13 historical
+# local walking clips from public-base NPZ assets for the optional version 3
+# 28-clip pool. This also writes reproduce/reference-config.json. Historical
+# standing data remains included for explicitly selected legacy protocols.
 "$amp_python" reproduce/verify-offline-inputs.py
 # CPU contract checks include the current URDF/head assets, attention readout,
 # vector-step clock, sensor capture and execution reuse. No long training.
@@ -72,7 +75,7 @@ CUDA_VISIBLE_DEVICES="" PYTHONPATH="$amp_root:$amp_root/tests" "$amp_python" -m 
   test_hiking_standing_expert \
   test_hiking_full_world_model test_hiking_depth_randomization \
   test_perceptive_reference_schedule test_mujoco_warp_hfield_fix \
-  test_hiking_reference_robot test_perceptive_attention_policy \
+  test_hiking_reference_robot test_hiking_alignment_v4 test_hiking_real_robot_options test_device_placement test_perceptive_attention_policy \
   test_hiking_depth_capture_execution test_hiking_vector_clock \
   test_replay_sampling_execution test_wm_macro_direct_staging \
   test_imagination_execution_reuse test_perceptive_profiler

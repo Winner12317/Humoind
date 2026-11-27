@@ -1,0 +1,66 @@
+{
+  "InstinctMJ": {
+    "repository": "https://github.com/project-instinct/InstinctMJ",
+    "revision": "03563ee02665f327425106372264070315673748",
+    "sha256": {
+      "src/instinct_mj/rl/supermimic/networks.py": "b6356b59cef81a01b1c86ced8247f83a7060fab9407a7ad943f8425e092e38f5",
+      "src/instinct_mj/rl/supermimic/parkour/runner.py": "1855c0dbc32005cd7087fb16e52d09cb1c4da2b9f512c838741c50181f07c8bb"
+    },
+    "licenses_sha256": {
+      "LICENSE": "0afbf192c4dfb4f8ffd7783eb61a8829d1ebee17d3f2b1dc1b0bdb62838f2a93"
+    }
+  },
+  "supermimic": {
+    "repository": "https://github.com/HybridRobotics/supermimic",
+    "revision": "5efbf114e11f725c31d83e217be987c13c0e4ce2",
+    "sha256": {
+      "src/supermimic/learners/wm_learner.py": "1e2d489a607677032d9d90de2511c2e8e1750bd845dcc7966026f23a65842665",
+      "src/supermimic/representations.py": "b863f79d32acd1486b9e03d0ff6a3f65cbc3bf353ef0d4688ef8dbb7d7c89869",
+      "src/supermimic/runners/supermimic_runner.py": "c19751a691cabfe579da973d9c384b7355c545292bdb7748155978a9d9d78d59",
+      "src/supermimic/utils/gencoord_helpers.py": "35e6421b41f517cde75a1d339e79cf84e2577fd035a7b99d7477792ad7cd82a0",
+      "src/supermimic/utils/helpers.py": "e15aacee141961e9b99fe669f394ae811b054a200bf665079f5953d5ebd0f78a"
+    },
+    "licenses_sha256": {
+      "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  },
+  "InstinctLab": {
+    "repository": "https://github.com/project-instinct/InstinctLab",
+    "revision": "de6b92f01eb155d51f30e8ed1ea7aecd2eb1f057",
+    "sha256": {
+      "source/instinctlab/instinctlab/envs/mdp/rewards/regularizations.py": "6c3a6f8dff8ca3560fcec795369a1270f0d0cdf49f3fe60eb43688fca77ba47e",
+      "source/instinctlab/instinctlab/envs/mdp/rewards/volume_points.py": "e3341a7546d696e3b17b7d7cdeff2c08d916b92a496cec0ca912381deb3d1322",
+      "source/instinctlab/instinctlab/tasks/parkour/mdp/rewards.py": "215f46266cb5d33ec366e49f4f568fb40140e709dd22837ebbd138efa390de0c",
+      "source/instinctlab/instinctlab/sensors/volume_points/volume_points.py": "1db98d636ba4822661f90663d8247df32431e85f19259f968201576c01ab2a7e",
+      "source/instinctlab/instinctlab/tasks/parkour/config/parkour_env_cfg.py": "4b6d2b43ad0971a4b69091863d7c7cb931ed3e142d54bbd3956785bd2b681ed7"
+    },
+    "licenses_sha256": {
+      "LICENSE": "0afbf192c4dfb4f8ffd7783eb61a8829d1ebee17d3f2b1dc1b0bdb62838f2a93"
+    },
+    "assets_sha256": {
+      "source/instinctlab/instinctlab/tasks/parkour/urdf/g1_29dof_torsoBase_popsicle_with_shoe.urdf": "ef88a3094280b966624f60f7179aa59b7b2536fc282cf9fefa0c71c75a0a40fb"
+    }
+  },
+  "IsaacLab": {
+    "repository": "https://github.com/isaac-sim/IsaacLab",
+    "revision": "f73c33173801f5f8afea4142482e47b7710c2b75",
+    "sha256": {
+      "source/isaaclab/isaaclab/envs/mdp/rewards.py": "918a18c90ecf9815ca646973de05060dbcd90f6615cd93b0fd4e6d629490191d",
+      "source/isaaclab/isaaclab/terrains/height_field/utils.py": "a8820498ecb5ba6535a27bf3d8c5baf9069d2314d8e7fd9d950f60912e301725"
+    },
+    "licenses_sha256": {
+      "LICENSE": "df351ebfa8af317bf5a9ad83df63a8b68e4f5c04b71f30767cdb27aa434eac62",
+      "LICENSE-mimic": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b"
+    }
+  },
+  "instinct_rl": {
+    "repository": "https://github.com/project-instinct/instinct_rl",
+    "revision": "574c8d50cdd16618cf8f4e0df553f84759c1d837",
+    "sha256": {
+      "instinct_rl/storage/amp_storage.py": "2f5a1441c9033e55581a451d933823ba159bcd55e95052d16cc565435e9baa83"
+    },
+    "licenses_sha256": {
+      "LICENSE": "b586fa163d3daaee86f2e77a4e68db158ed336a1fe920a6634d211332134ce4b"
+    }
+  }
+}

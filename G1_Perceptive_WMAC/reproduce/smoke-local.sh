@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 手册第 13.2 节的真实 GPU 短测。每次执行都会创建一次新的训练记录。
+# Run the GPU smoke test from Section 13.2. Each invocation starts a new training run.
 set -eo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 source reproduce/activate.sh
@@ -12,4 +12,4 @@ exec python scripts/train_wmac_perceptive.py \
   --latent-recon-images 16 \
   --collect-steps 8 --log-interval 1 --save-interval 5 \
   --no-compile --no-cuda-graphs \
-  --run-name repro_v3_gpu_smoke
+  --run-name repro_gpu_smoke "$@"

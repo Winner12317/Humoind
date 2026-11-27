@@ -10,7 +10,9 @@ def _registered_environment(play=False):
     cfg = PerceptiveConfig.defaults("supermimic")
     env = g1_amp_perceptive_hiking_env_cfg(play=play, motion_scope=cfg.motion_scope,
         sensor_protocol=cfg.sensor_protocol, motion_data_protocol=cfg.motion_data_protocol,
-        locomotion_objective=cfg.locomotion_objective, hiking_training_version=cfg.hiking_training_version)
+        locomotion_objective=cfg.locomotion_objective, hiking_training_version=cfg.hiking_training_version,
+        robot_variant=cfg.robot_variant, collision_horizontal_scale=cfg.collision_horizontal_scale,
+        depth_geometry=cfg.depth_geometry)
     if not play:
         env.scene.num_envs = cfg.num_envs
     return env

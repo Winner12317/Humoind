@@ -24,7 +24,8 @@ def g1_amp_perceptive_hiking_env_cfg(play=False,motion_scope="forward_walk_turn_
                                    sensor_protocol=LEGACY_SENSOR_PROTOCOL,
                                    motion_data_protocol="filtered_walk_turn_v2",
                                    locomotion_objective="legacy_walk_turn_v1",
-                                   hiking_training_version=1):
+                                   hiking_training_version=1,robot_variant="unshod",
+                                   collision_horizontal_scale=None,depth_geometry="collision"):
     """Build the current walking task or an explicit historical joint task.
 
     The scope is explicit so loading an old checkpoint for comparison cannot
@@ -49,12 +50,14 @@ def g1_amp_perceptive_hiking_env_cfg(play=False,motion_scope="forward_walk_turn_
     cfg=g1_amp_flat_aligned_env_cfg(play=play)
     cfg._hiking_full_protocol=full_objective
     cfg._hiking_training_version=hiking_training_version
+    cfg._hiking_robot_variant=robot_variant
     cfg._perceptive_sensor_protocol=sensor_protocol
     cfg.scene.terrain.terrain_type="generator"
     cfg.scene.terrain.terrain_generator=hiking_terrain_generator(
         recovery_flat_fraction=0. if walking_only else .25,walking_only=walking_only,
-        collision_horizontal_scale=.05 if hiking_training_version >= 3 else .1,
-        task_protocol=locomotion_objective)
+        collision_horizontal_scale=(collision_horizontal_scale if collision_horizontal_scale is not None
+                                    else .05 if hiking_training_version >= 3 else .1),
+        task_protocol=locomotion_objective,depth_source_mesh=depth_geometry=="source_mesh")
     cfg.scene.terrain.max_init_terrain_level=1
     # The physical camera follows full torso orientation. Falling terminates
     # the walking-only task; the historical joint scope preserves old behavior.
@@ -159,6 +162,11 @@ def g1_amp_perceptive_hiking_env_cfg(play=False,motion_scope="forward_walk_turn_
         cfg.sim.njmax=700
         cfg.sim.contact_sensor_maxmatch=128
         cfg.sim.mujoco.ccd_iterations=128
+        if collision_horizontal_scale is not None and collision_horizontal_scale < .05:
+            # Host MuJoCo makes one contact per heightfield prism under each
+            # foot geom, so the initial-state check needs 876 constraint rows
+            # on the 2.5cm grid. MuJoCo-Warp itself keeps four per geom pair.
+            cfg.sim.njmax=1024
     if play:
         cfg.curriculum={}
         # The old play callback is ordered after motion reset. Keeping it would

@@ -27,18 +27,23 @@ def foot_volume_edge_cost(kinematics,foot_ids,terrain,margin=.04):
     return (penetration*(speeds.norm(dim=-1)+1e-3)).sum((-1,-2))
 
 
-def hiking_foot_volume_points(kinematics,foot_ids,foot_points=None,foot_linear_velocity=None):
-    """Original ordinary G1 task grid: 10 x 5 x 2 = 100 points per foot.
+def hiking_foot_point_grid(z_range=(-.04,0.),*,device=None,dtype=torch.float32):
+    """Hiking's Grid3dPointsGenerator: 10 x 5 x 2 = 100 points per foot.
 
-    This model has no shoe collision geometry; ShoeConfigMixin's lowered z
-    interval belongs to the distinct shoe task and is not mixed into this one.
+    x and y are fixed by the task; z is (-0.04, 0) for the unshod G1 and
+    (-0.063, -0.023) with ShoeConfigMixin, in the ankle-roll link frame.
     """
+    axes=(torch.linspace(-.025,.12,10,device=device,dtype=dtype),
+          torch.linspace(-.03,.03,5,device=device,dtype=dtype),
+          torch.linspace(z_range[0],z_range[1],2,device=device,dtype=dtype))
+    return torch.stack(torch.meshgrid(*axes,indexing="ij"),-1).reshape(100,3)
+
+
+def hiking_foot_volume_points(kinematics,foot_ids,foot_points=None,foot_linear_velocity=None):
+    """World positions and velocities of the foot grid (unshod when not given)."""
     p,q,v,w=kinematics
     if foot_points is None:
-        axes=(torch.linspace(-.025,.12,10,device=p.device,dtype=p.dtype),
-              torch.linspace(-.03,.03,5,device=p.device,dtype=p.dtype),
-              torch.linspace(-.04,0.,2,device=p.device,dtype=p.dtype))
-        foot_points=torch.stack(torch.meshgrid(*axes,indexing="ij"),-1).reshape(100,3)
+        foot_points=hiking_foot_point_grid(device=p.device,dtype=p.dtype)
     else:foot_points=foot_points.to(p)
     offset=quat_apply(q[...,foot_ids,None,:],foot_points)
     points=p[...,foot_ids,None,:]+offset

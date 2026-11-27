@@ -104,7 +104,7 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
 
   # Only record videos on rank 0 to avoid multiple workers writing to the same files.
   if cfg.video and rank == 0:
-    env = VideoRecorder(  # 写一个自己的包装器，用于motion tracking
+    env = VideoRecorder(  # Record videos with the motion-tracking wrapper.
       env,
       video_folder=Path(log_dir) / "videos" / "train",
       step_trigger=lambda step: step % cfg.video_interval == 0,
@@ -113,7 +113,7 @@ def run_train(task_id: str, cfg: TrainConfig, log_dir: Path) -> None:
     )
     print("[INFO] Recording videos during training.")
 
-  env = RslRlVecEnvWrapper(env, clip_actions=cfg.agent.clip_actions) # 因为我要接上自己的rsl_rl，所以要重新写一个包装器
+  env = RslRlVecEnvWrapper(env, clip_actions=cfg.agent.clip_actions) # Adapt the environment to the local rsl_rl interface.
 
   agent_cfg = asdict(cfg.agent)
   env_cfg = asdict(cfg.env)

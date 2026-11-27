@@ -30,6 +30,13 @@ class PerceptiveStateAdapter(StateAdapter):
                 self.robot, env.sim.mj_model, self.device, self.hiking_training_version)
         self.context_dim=(100+(len(self.material_geom_ids) if self.material_geom_ids is not None else 0)
                           if self.full_hiking else 35)
+        # Optional robot-dynamics randomization sample, appended after the materials.
+        self.robot_dynamics_randomization=getattr(env.cfg,"_robot_dynamics_randomization","none")
+        self.robot_dynamics_columns=0
+        if self.full_hiking and self.robot_dynamics_randomization!="none":
+            from .robot_dynamics import ROBOT_DYNAMICS_CONTEXT_WIDTH
+            self.robot_dynamics_columns=ROBOT_DYNAMICS_CONTEXT_WIDTH
+            self.context_dim+=self.robot_dynamics_columns
         self.contact_dim=13 if self.full_hiking else 2
         self.camera_capture_steps=(5 if getattr(env.cfg,"_perceptive_sensor_protocol",None)
             =="g1_rpl_depth_v1" else 0)
@@ -61,6 +68,14 @@ class PerceptiveStateAdapter(StateAdapter):
             if friction.ndim==2:friction=friction.unsqueeze(0)
             applied=friction.expand(self.env.num_envs,-1,-1).index_select(1,ids)[...,0]
             parts=(*parts,applied)
+        if getattr(self,"robot_dynamics_columns",0):
+            sample=getattr(self.env,"_robot_dynamics_context",None)
+            if sample is None:
+                # Event not installed (e.g. PLAY): the unmodified training robot.
+                from .robot_dynamics import nominal_robot_dynamics_context
+                sample=nominal_robot_dynamics_context(self.robot_dynamics_randomization,
+                                                      self.env.num_envs,base.device)
+            parts=(*parts,sample.to(base.dtype))
         return torch.cat(parts,-1)
 
     def actor_frame(self,state,previous_action,command,context,noise=False,kinematics=None):
@@ -115,7 +130,7 @@ class PerceptiveStateAdapter(StateAdapter):
             from src.wmac.gencoord import gencoord_features
             from .hiking_context import normalize_hiking_sim_context
             # The true previous action is already carried in context[38:67].
-            return torch.cat((gencoord_features(state), command, normalize_hiking_sim_context(context),
+            return torch.cat((gencoord_features(state), command, normalize_hiking_sim_context(context,getattr(self,"robot_dynamics_columns",0)),
                               self.terrain.local_patch(state)), -1)
         physical=super().critic_features(self.ground_relative_state(state),previous_action,command,context)
         return torch.cat((physical,self.terrain.local_patch(state)),-1)

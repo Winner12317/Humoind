@@ -5,7 +5,7 @@
 - [SuperAMP 训练框架](SuperAMP/README_zh.md)和 [PM01 训练配置](SuperAMP/docs/pm01/README.md)
 - [PM01 重定向、接触修正和逐帧查看器](pm01_retarget/README.md)
 - [平地 G1 的 WMAC＋AMP 复现手册](docs/平地%20G1%20的%20WMAC＋AMP%20复现手册.md)
-- [G1 视觉越野行走训练与快速开始](G1_Perceptive_WMAC/reproduce/快速开始.md)
+- [G1 视觉越野行走训练与快速开始](G1_Perceptive_WMAC/reproduce/QUICKSTART.md)
 
 ## 获取代码
 

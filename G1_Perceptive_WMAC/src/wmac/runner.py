@@ -37,6 +37,7 @@ from .networks import Actor, Critic, RunningNorm, WorldModel, frozen_parameters
 from .actors import actor_architecture, create_actor
 from .checkpoints import (checkpoint_recovery_semantics, checkpoint_height_reward_semantics,
                           checkpoint_actor_architecture)
+from .device_placement import boundary, learner_adapter
 from .replay import ReplayBuffer
 from .routing import (is_moe, load_fraction, router_losses, routing_metrics,
                       routing_metric_keys, parameter_grad_norm)
@@ -142,7 +143,14 @@ class WmacRunner:
         self.started, self.wall_offset = time.perf_counter(), 0.0
         self._cost_history_complete = True
         self._cost_trajectory_id = str(uuid.uuid4())
-        self.env, self.cfg, self.adapter = env, cfg, env.adapter
+        self.env, self.cfg = env, cfg
+        # The simulator may run on another device than the learner. Imagination
+        # then uses its own copy of the adapter's constants, and live readings
+        # cross over once per control step (see device_placement).
+        self.device = torch.device(cfg.device)
+        self.env_device = torch.device(env.device)
+        env.adapter.recovery_counter_semantics = cfg.recovery_counter_semantics
+        self.adapter = learner_adapter(env.adapter, self.device)
         self.adapter.recovery_counter_semantics = cfg.recovery_counter_semantics
         expected_power = 2. if cfg.recovery_height_reward == 'upright_v2' else 0.
         # Reward managers prepare their own term config at construction time.
@@ -163,7 +171,7 @@ class WmacRunner:
         obs, _ = env.reset()
         self.actor = self._make_actor(cfg, obs['actor'].shape[-1]).to(self.device)
         self.actor_initialization_history = []
-        features = self.adapter.critic_features(self.adapter.state(), env.action_manager.action,
+        features = self.adapter.critic_features(self.adapter.state(), self._from_env(env.action_manager.action),
                                                 self.adapter.command(), self.adapter.context())
         self.critic = Critic(features.shape[-1], hidden=cfg.critic_hidden).to(self.device)
         self.actor.norm.max_count = self.critic.norm.max_count = cfg.observation_normalizer_until
@@ -373,11 +381,18 @@ class WmacRunner:
                 setattr(self.amp_norm, key, settings[key])
 
     @torch.no_grad()
+    def _from_env(self, value):
+        """A tensor or transition from the simulator, on the learner's device."""
+        return boundary(self)[0](value)
+
+    def _to_env(self, value):
+        return boundary(self)[1](value)
+
     def collect(self, count):
         totals = dict(real_task_reward=0., terminated_fraction=0., timeout_fraction=0.,
                       recovery_fraction=0., boundary_fraction=0., invalid_transition_fraction=0.)
         for _ in range(count):
-            obs = self.env.obs_buf['actor']
+            obs = self._from_env(self.env.obs_buf['actor'])
             finite_obs = torch.isfinite(obs).all(-1)
             if getattr(self.actor, 'normalize_observations', True):
                 self.actor.norm.update(obs[finite_obs & self._train_env_mask])
@@ -386,8 +401,8 @@ class WmacRunner:
                 self.env.num_envs, 29, device=self.device)).clamp(-self.cfg.action_limit, self.cfg.action_limit)
             if not bool(torch.isfinite(action).all()):
                 raise RuntimeError('Non-finite policy action: refusing to contaminate the physical simulation')
-            self.env.step(action)
-            batch = self.env.transition
+            self.env.step(self._to_env(action))
+            batch = self._from_env(self.env.transition)
             accepted = self.replay.add(batch)
             train = accepted & self._train_env_mask
             self.world_model.update_normalizers(batch['state'][train], batch['action'][train],

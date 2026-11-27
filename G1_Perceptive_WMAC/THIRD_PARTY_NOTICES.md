@@ -106,6 +106,22 @@ The unshod body model used by Hiking training version 3 includes the unchanged
 The local head mesh is named `hiking_head_link.STL`. The MuJoCo adapter
 expresses the upstream rigid bodies in the pelvis-root GenCoord coordinates.
 
+The optional shod robot of training version 4 (`--robot-variant shoe`) uses the
+unchanged `g1_29dof_torsoBase_popsicle_with_shoe.urdf` from
+`source/instinctlab/instinctlab/tasks/parkour/urdf/` of the same InstinctLab
+commit, stored as `g1_29dof_torsobase_popsicle_with_shoe.urdf` under the same
+CC-BY-NC-4.0 license.
+
+Training version 4 detects terrain edges on Hiking's own terrain mesh.
+`isaaclab_height_field_mesh` in `src/tasks/amp_perceptive/hiking_geometry.py` is
+a port of `convert_height_field_to_mesh` from
+[isaac-sim/IsaacLab](https://github.com/isaac-sim/IsaacLab/tree/f73c33173801f5f8afea4142482e47b7710c2b75),
+`source/isaaclab/isaaclab/terrains/height_field/utils.py`, BSD-3-Clause
+(`licenses/isaaclab-BSD-3-Clause.txt`). The unchanged source file is kept in
+`reproduce/references/IsaacLab/` for the regression test. The mesh assembly
+and merge steps follow InstinctLab's `terrains/terrain_importer.py` under the
+InstinctLab license above.
+
 The `hiking_full_v1` task port also adapts InstinctLab `de6b92f`'s complete
 ordinary G1 task reward formulas, observation history/scales, delayed ideal-PD
 parameters, command allocation, curriculum, terrain generation and reset
@@ -176,3 +192,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+The robot dynamics profile
+`src/assets/robots/unitree_g1/unitree_mujoco_g1_29dof_dynamics.json` contains
+numerical body masses, inertias, centres of mass and joint armature, damping and
+friction loss extracted by `scripts/extract_robot_dynamics_profile.py` from
+[unitreerobotics/unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco/tree/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d)
+`unitree_robots/g1/g1_29dof.xml`, commit `1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d`,
+SHA256 `423e28bd718b19f7a65cda539b6f794ddbb268b4b9bdbd85f4bd982b30729617`.
+No meshes are copied. Copyright (c) 2016-2024 HangZhou YuShu TECHNOLOGY CO.,LTD.
+("Unitree Robotics"); its BSD-3-Clause license is reproduced in
+[licenses/unitree_mujoco-BSD-3-Clause.txt](licenses/unitree_mujoco-BSD-3-Clause.txt).

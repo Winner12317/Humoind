@@ -104,7 +104,8 @@ class LatentPerceptiveWorldModel(TerrainPerceptiveWorldModel):
                  hidden: Sequence[int] = (512, 512, 512), context_dim: int = 35,
                  dt: float = .02, decimation: int = 4, latent_dim: int = 128,
                  contact_dim: int = 2, *, continuous_normalization: bool = False,
-                 action_transform: tuple[torch.Tensor, torch.Tensor] | None = None):
+                 action_transform: tuple[torch.Tensor, torch.Tensor] | None = None,
+                 robot_dynamics_columns: int = 0):
         if isinstance(latent_dim, bool) or not isinstance(latent_dim, int) or latent_dim < 1:
             raise ValueError("latent_dim must be a positive integer")
         super().__init__(terrain_oracle, spec, hidden, context_dim,
@@ -113,6 +114,8 @@ class LatentPerceptiveWorldModel(TerrainPerceptiveWorldModel):
         del self.depth_net
         del self.contact_net
         self.latent_dim, self.context_dim = latent_dim, context_dim
+        # Trailing robot-dynamics context columns are already normalized.
+        self.robot_dynamics_columns = int(robot_dynamics_columns)
         self.z_dim, self.num_contact = latent_dim, contact_dim
         self.in_dim = 68 + 29 + context_dim + self.terrain_patch_dim
         # SuperMimic keeps collecting WM moments throughout training (until=None).
@@ -154,7 +157,7 @@ class LatentPerceptiveWorldModel(TerrainPerceptiveWorldModel):
             action = action * self.action_scale + self.action_offset
             # SuperMimic maps DR coefficients using their configured ranges,
             # independently from its running state/action normalization.
-            context = normalize_hiking_sim_context(context)
+            context = normalize_hiking_sim_context(context, self.robot_dynamics_columns)
         else:
             ground = self.terrain_oracle.height_at(state[..., :2])
             state = torch.cat((state[..., :2], (state[..., 2] - ground).unsqueeze(-1), state[..., 3:]), -1)

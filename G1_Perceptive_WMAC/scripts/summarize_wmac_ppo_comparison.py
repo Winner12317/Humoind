@@ -11,11 +11,9 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.font_manager import FontProperties
 import numpy as np
 
-FONT = FontProperties(fname="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
-plt.rcParams.update({"font.family": FONT.get_name(), "axes.unicode_minus": False,
+plt.rcParams.update({"axes.unicode_minus": False,
     "axes.spines.top": False, "axes.spines.right": False, "savefig.facecolor": "white"})
 
 
@@ -160,25 +158,25 @@ def main():
     periodic=json.loads((root/"wmac_periodic_evaluations.json").read_text())
     xs=[x["iteration"] for x in periodic]
     fig,axes=plt.subplots(2,2,figsize=(11.4,7.2))
-    axes[0,0].plot(xs,[x["results"]["recovery"]["recovery_success_fraction"]*100 for x in periodic],"o-",label="曾完成起身")
-    axes[0,0].plot(xs,[x["results"]["recovery"]["final_upright_fraction"]*100 for x in periodic],"s--",label="末尾直立")
-    axes[0,0].set(ylabel="恢复初态比例 (%)",ylim=(-5,105),title="周期选模评估：恢复强烈振荡")
+    axes[0,0].plot(xs,[x["results"]["recovery"]["recovery_success_fraction"]*100 for x in periodic],"o-",label="Stood up at least once")
+    axes[0,0].plot(xs,[x["results"]["recovery"]["final_upright_fraction"]*100 for x in periodic],"s--",label="Upright at the end")
+    axes[0,0].set(ylabel="Recovery starts (%)",ylim=(-5,105),title="Recovery rates vary across checkpoints")
     axes[0,0].legend(fontsize=8)
-    axes[0,1].plot(xs,[x["results"]["walk"]["velocity_xy_error_mean"] for x in periodic],"o-",label="行走 XY")
-    axes[0,1].plot(xs,[x["results"]["recovery"]["velocity_xy_error_mean"] for x in periodic],"s--",label="恢复全阶段 XY")
-    axes[0,1].set(ylabel="速度误差 (m/s)",title="真实物理效果仍需持续观察")
+    axes[0,1].plot(xs,[x["results"]["walk"]["velocity_xy_error_mean"] for x in periodic],"o-",label="Walking XY")
+    axes[0,1].plot(xs,[x["results"]["recovery"]["velocity_xy_error_mean"] for x in periodic],"s--",label="Full recovery episode XY")
+    axes[0,1].set(ylabel="Velocity error (m/s)",title="Velocity tracking in physical simulation")
     axes[0,1].legend(fontsize=8)
     with (root/"wmac_training_cutoff26000.csv").open() as f:train=list(csv.DictReader(f))
     sampled=train[::50]
-    axes[1,0].plot([int(x["iteration"]) for x in sampled],[float(x["validation_model_error"]) for x in sampled],lw=.9,label="held-out 状态误差")
-    axes[1,0].plot([int(x["iteration"]) for x in sampled],[float(x["validation_recovery_error"]) for x in sampled],lw=.7,alpha=.7,label="恢复分项")
-    axes[1,0].set(yscale="log",ylabel="归一化预测误差",title="较低模型误差不等于策略稳定")
+    axes[1,0].plot([int(x["iteration"]) for x in sampled],[float(x["validation_model_error"]) for x in sampled],lw=.9,label="Held-out state error")
+    axes[1,0].plot([int(x["iteration"]) for x in sampled],[float(x["validation_recovery_error"]) for x in sampled],lw=.7,alpha=.7,label="Recovery subset")
+    axes[1,0].set(yscale="log",ylabel="Normalized prediction error",title="Model error and policy stability can diverge")
     axes[1,0].legend(fontsize=8)
     axes[1,1].plot(xs,[x["results"]["recovery"]["success_then_walk_fraction_all_starts"]*100 for x in periodic],"o-")
-    axes[1,1].set(ylabel="起身后续走比例 (%)",ylim=(-5,105),title="周期协议续走容差为 0.5，与主复评区分")
+    axes[1,1].set(ylabel="Stood up and kept walking (%)",ylim=(-5,105),title="Periodic test: continued-walking tolerance 0.5")
     for ax in axes.flat:
-        ax.set_xlabel("WMAC 外循环轮数");ax.grid(alpha=.18)
-    fig.suptitle("WMAC 截至 26000 轮：seed2026 / N32 / 5秒周期评估",fontsize=14)
+        ax.set_xlabel("WMAC outer iteration");ax.grid(alpha=.18)
+    fig.suptitle("WMAC through iteration 26,000: periodic 5 s evaluations, seed 2026, 32 environments",fontsize=14)
     fig.tight_layout(rect=(0,0,1,.94));fig.savefig(root/"wmac_convergence.png",dpi=170);plt.close(fig)
 
     available=[i for i in (16000,20000,26000) if f"wmac_{i}" in by_label and f"ppo_{i}" in by_label]
@@ -186,20 +184,20 @@ def main():
         fig,axes=plt.subplots(1,3,figsize=(12,4.0))
         x=np.arange(len(available));width=.36
         for ax,metric,title,scale in [
-            (axes[0],"recovery_success","10秒内起身成功率 (%)",100),
-            (axes[1],"walk_xy_error","行走速度误差 (m/s，越低越好)",1),
-            (axes[2],"recovery_final_upright","恢复末尾直立比例 (%)",100)]:
-            for off,algo,name,color in [(-width/2,"wmac","WMAC 世界模型","#26798b"),(width/2,"ppo","11月4日 PPO","#b98650")]:
+            (axes[0],"recovery_success","Stood up within 10 s (%)",100),
+            (axes[1],"walk_xy_error","Walking velocity error (m/s, lower is better)",1),
+            (axes[2],"recovery_final_upright","Upright at end of recovery (%)",100)]:
+            for off,algo,name,color in [(-width/2,"wmac","WMAC world model","#26798b"),(width/2,"ppo","Nov 4 PPO","#b98650")]:
                 vals=[by_label[f"{algo}_{i}"][metric]*scale for i in available]
                 bars=ax.bar(x+off,vals,width,label=name,color=color)
                 for b,v in zip(bars,vals):ax.text(b.get_x()+width/2,v+(.018 if scale==1 else 1.2),f"{v:.3f}" if scale==1 else f"{v:.1f}",ha="center",fontsize=8)
-            ax.set_title(title,fontsize=10);ax.set_xticks(x,[str(i) for i in available]);ax.set_xlabel("对应外循环轮数")
+            ax.set_title(title,fontsize=10);ax.set_xticks(x,[str(i) for i in available]);ax.set_xlabel("Outer iteration")
             if scale==100:ax.set_ylim(0,114)
             else:ax.set_ylim(0,max(by_label[f"{a}_{i}"][metric] for a in ("wmac","ppo") for i in available)*1.25)
             ax.grid(axis="y",alpha=.15);ax.set_axisbelow(True)
         handles, labels = axes[0].get_legend_handles_labels()
         fig.legend(handles, labels, fontsize=9, loc="upper center", bbox_to_anchor=(.5,.92), ncol=2, frameon=False)
-        fig.suptitle("同轮数独立物理复评：seed2030/2031，每模式共256个初态",fontsize=13)
+        fig.suptitle("Physical evaluation at matched iterations: seeds 2030 and 2031, 256 starts per mode",fontsize=13)
         fig.tight_layout(rect=(0,0,1,.85));fig.savefig(root/"same_iteration_comparison.png",dpi=170);plt.close(fig)
     print(json.dumps({"completed_policies":len(summaries),"complete":payload["complete"],"output":str(root)},ensure_ascii=False))
 

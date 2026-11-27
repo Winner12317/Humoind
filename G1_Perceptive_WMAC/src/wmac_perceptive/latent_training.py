@@ -11,6 +11,7 @@ import math
 import torch
 from torch.nn import functional as F
 
+from src.wmac.device_placement import boundary
 from src.wmac.runner import _device_batch
 from src.wmac.networks import _quat_to_rotvec
 from src.wmac.state import quat_inv, quat_mul
@@ -26,11 +27,15 @@ def collect_latent(runner, count):
                   recovery_fraction=0., boundary_fraction=0., invalid_transition_fraction=0.,
                   sensor_valid_fraction=0., standing_command_fraction=0.)
     fast_collection=getattr(runner.cfg,"hiking_training_version",1)>=2
+    # The simulator may live on another device than the learner; then these two
+    # move what crosses per control step. On one device they return their argument.
+    from_env,to_env=boundary(runner)
     if fast_collection:
         # Each step still contributes its own mean. Keep the small diagnostics
         # on the device until this collection finishes, instead of reading one
         # CUDA scalar for every metric after every physical step.
-        device_totals=runner.env.obs_buf["actor"].new_zeros(len(totals),dtype=torch.float64)
+        device_totals=torch.zeros(len(totals),dtype=torch.float64,
+            device=getattr(runner,"device",None) or runner.env.obs_buf["actor"].device)
     reuse_processed=(fast_collection and getattr(runner,"_processed_history",False)
         and runner.spec.depth_protocol=="hiking_v1"
         and runner.cfg.depth_noise_std_m==0 and runner.cfg.depth_dropout_probability==0)
@@ -38,7 +43,7 @@ def collect_latent(runner, count):
         and all(callable(getattr(runner.depth_history,name,None)) for name in
                 ("sampled_frames","sampled_successor_frames","append_with_reset_ids")))
     for _ in range(count):
-        proprio = torch.nan_to_num(runner.env.obs_buf["actor"])
+        proprio = torch.nan_to_num(from_env(runner.env.obs_buf["actor"]))
         # append() replaces its buffer rather than mutating this snapshot.
         # The optimized history already contains processed single frames.
         processed_history=getattr(runner,"_processed_history",False)
@@ -55,8 +60,8 @@ def collect_latent(runner, count):
             action = action.clamp(-runner.cfg.action_limit, runner.cfg.action_limit)
         if not bool(torch.isfinite(action).all()):
             raise RuntimeError("Non-finite latent policy action")
-        runner.env.step(action)
-        batch = runner.env.transition
+        runner.env.step(to_env(action))
+        batch = from_env(runner.env.transition)
         if not fast_collection and "command_standing" in batch:
             totals["standing_command_fraction"] += float(batch["command_standing"].float().mean())
         # Capture the end-of-transition stack before episode reset. Reuse its
@@ -83,7 +88,7 @@ def collect_latent(runner, count):
         if not runner.uses_reference_schedule:
             runner.critic.norm.update(runner.adapter.critic_features(batch["state"][train],
                 batch["previous_action"][train], batch["command"][train], batch["context"][train]))
-        runner.current_depth = read_depth_frame(runner.env).detach()
+        runner.current_depth = from_env(read_depth_frame(runner.env)).detach()
         done = batch["terminated"] | batch["timeout"]
         if reuse_processed:
             # Physical DR has already drawn exactly once for each captured

@@ -54,7 +54,9 @@ def old_optimized_config():
 class PerceptiveSensorProtocolTest(unittest.TestCase):
     def test_fresh_cli_selects_depth_only_but_legacy_api_keeps_old_sensor(self):
         fresh = parse_config([])
-        self.assertEqual(fresh.sensor_protocol, G1_HIKING_CALIBRATED_SENSOR_PROTOCOL)
+        self.assertEqual(fresh.sensor_protocol, HIKING_SENSOR_PROTOCOL)
+        self.assertEqual(parse_config(["--hiking-training-version", "3"]).sensor_protocol,
+                         G1_HIKING_CALIBRATED_SENSOR_PROTOCOL)
         self.assertEqual(fresh.visual_mode, LATENT_VISUAL_MODE)
         self.assertFalse(perception_spec_from_config(fresh).include_valid)
         spec = perception_spec_from_config(fresh)
@@ -92,8 +94,9 @@ class PerceptiveSensorProtocolTest(unittest.TestCase):
     def test_ordinary_resume_cannot_switch_camera_protocol_in_either_direction(self):
         cases = ((old_optimized_config(), HIKING_SENSOR_PROTOCOL),
                  (parse_config([]), LEGACY_SENSOR_PROTOCOL),
-                 (parse_config([]), HIKING_SENSOR_PROTOCOL),
-                 (parse_config(["--sensor-protocol", HIKING_SENSOR_PROTOCOL]), G1_HIKING_CALIBRATED_SENSOR_PROTOCOL),
+                 (parse_config([]), G1_HIKING_CALIBRATED_SENSOR_PROTOCOL),
+                 (parse_config(["--hiking-training-version", "3"]), HIKING_SENSOR_PROTOCOL),
+                 (parse_config(["--sensor-protocol", G1_HIKING_CALIBRATED_SENSOR_PROTOCOL]), HIKING_SENSOR_PROTOCOL),
                  (parse_config(["--hiking-training-version", "2"]), HIKING_SENSOR_PROTOCOL),
                  (parse_config(["--hiking-training-version", "2", "--sensor-protocol",G1_RPL_SENSOR_PROTOCOL,
                                 "--replay-storage","frame_fp16"]),G1_HIKING_DR_SENSOR_PROTOCOL))

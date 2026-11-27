@@ -62,7 +62,10 @@ def get_hiking_joint_parameters(joint_names,*,device=None,dtype=torch.float32):
 
 class ResetFixedDelay:
     """Fixed-lag history with IsaacLab's first-sample backfill semantics."""
-    def __init__(self,num_envs,width,device):
+    def __init__(self,num_envs,width,device,max_lag=HIKING_MAX_DELAY_SUBSTEPS):
+        if max_lag not in range(HIKING_MAX_DELAY_SUBSTEPS+1):
+            raise ValueError("Actuator lag must be 0..2 physics substeps")
+        self.max_lag=max_lag
         self.history=torch.zeros(num_envs,3,width,device=device)
         self.lags=torch.zeros(num_envs,dtype=torch.long,device=device)
         self.length=torch.zeros(num_envs,dtype=torch.long,device=device)
@@ -71,7 +74,7 @@ class ResetFixedDelay:
         ids=slice(None) if env_ids is None else env_ids
         self.history[ids]=0
         self.length[ids]=0
-        self.lags[ids]=torch.randint(0,3,self.lags[ids].shape,device=self.lags.device)
+        self.lags[ids]=torch.randint(0,self.max_lag+1,self.lags[ids].shape,device=self.lags.device)
 
     def append_and_get(self,value):
         self.history[:,1:].copy_(self.history[:,:-1].clone())
@@ -84,6 +87,9 @@ class ResetFixedDelay:
 @dataclass(kw_only=True)
 class HikingDelayedPdActuatorCfg(ActuatorCfg):
     group: str
+    # Largest reset-sampled lag in physics substeps. Hiking's delayed actuators
+    # use 2; its shod task runs the undelayed ``beyondmimic_g1_29dof_actuators``.
+    max_delay_substeps: int = HIKING_MAX_DELAY_SUBSTEPS
 
     def build(self,entity,target_ids,target_names):
         return HikingDelayedPdActuator(self,entity,target_ids,target_names)
@@ -106,7 +112,8 @@ class HikingDelayedPdActuator(Actuator):
         self.default_stiffness=self.stiffness.clone()
         self.default_damping=self.damping.clone()
         self.default_force_limit=self.force_limit.clone()
-        self.delay=ResetFixedDelay(data.nworld,3*len(self._target_names),device)
+        self.delay=ResetFixedDelay(data.nworld,3*len(self._target_names),device,
+                                   max_lag=self.cfg.max_delay_substeps)
 
     def compute(self,cmd:ActuatorCmd):
         targets=self.delay.append_and_get(torch.cat((cmd.position_target,cmd.velocity_target,cmd.effort_target),-1))
@@ -118,11 +125,12 @@ class HikingDelayedPdActuator(Actuator):
         self.delay.reset(env_ids)
 
 
-def configure_hiking_actuators(cfg):
+def configure_hiking_actuators(cfg,*,max_delay_substeps=HIKING_MAX_DELAY_SUBSTEPS):
     robot=cfg.scene.entities["robot"]
     # Legacy G1 presets share their articulation object: detach before edits.
     robot.articulation=deepcopy(robot.articulation)
-    robot.articulation.actuators=tuple(HikingDelayedPdActuatorCfg(group=group,target_names_expr=patterns)
+    robot.articulation.actuators=tuple(HikingDelayedPdActuatorCfg(group=group,target_names_expr=patterns,
+                                        max_delay_substeps=max_delay_substeps)
                                     for group,patterns in _GROUP_EXPRESSIONS.items())
     robot.articulation.soft_joint_pos_limit_factor=.9
     action=cfg.actions["joint_pos"]

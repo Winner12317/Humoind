@@ -223,8 +223,21 @@ def evaluate_mode(actor, config, args, mode, output):
     cfg = copy.deepcopy(config)
     cfg.num_envs, cfg.seed, cfg.device = args.num_envs, args.seed, args.device
     cfg.cuda_graphs, cfg.compile = False, False
+    if getattr(args, "terrain_geometry", "training") == "real_robot":
+        # Held-out geometry: the camera sees Hiking's vertical risers and the
+        # feet meet them on the 2.5 cm collision grid, whatever the policy trained on.
+        cfg.collision_horizontal_scale, cfg.depth_geometry = .025, "source_mesh"
     seed_all(args.seed, args.device)
-    env = make_environment(cfg, play=True, mode=mode, env_config_transform=_quantitative_play_config)
+    def transform(env_cfg):
+        env_cfg = _quantitative_play_config(env_cfg)
+        if getattr(args, "robot_dynamics", "training") != "training":
+            from mjlab.managers.event_manager import EventTermCfg
+            from src.wmac_perceptive.robot_dynamics import apply_robot_dynamics_profile
+            env_cfg.events["robot_dynamics_profile"] = EventTermCfg(
+                func=apply_robot_dynamics_profile, mode="startup",
+                params={"profile_name": args.robot_dynamics})
+        return env_cfg
+    env = make_environment(cfg, play=True, mode=mode, env_config_transform=transform)
     try:
         _assert_no_noise_or_push(env)
         torch.set_float32_matmul_precision("highest")
@@ -343,6 +356,12 @@ def parser():
     value.add_argument("--seed", type=int, default=2032)
     value.add_argument("--save-trace", action="store_true")
     value.add_argument("--output", type=Path)
+    value.add_argument("--robot-dynamics", default="training",
+                       help="training, or a robot dynamics profile such as unitree_mujoco_g1_29dof "
+                            "(another G1 model's inertials and joint armature/damping/friction loss)")
+    value.add_argument("--terrain-geometry", choices=("training", "real_robot"), default="training",
+                       help="training: the checkpoint's own terrain geometry. real_robot: the depth camera sees "
+                            "Hiking's vertical-riser mesh and collision uses the 2.5 cm grid")
     return value
 
 
@@ -355,6 +374,16 @@ def main(argv=None):
     os.environ.setdefault("MUJOCO_GL", "egl"); os.environ.setdefault("OMP_NUM_THREADS", "1")
     output = args.output.expanduser().resolve() if args.output else args.checkpoint.parent/"evaluations"/f"perceptive_{datetime.now():%Y-%m-%d_%H-%M-%S_%f}"
     output.mkdir(parents=True, exist_ok=False)
+    if args.robot_dynamics != "training":
+        from src.wmac_perceptive.robot_dynamics import ROBOT_DYNAMICS_PROFILES
+        if args.robot_dynamics not in ROBOT_DYNAMICS_PROFILES:
+            argparser.error(f"--robot-dynamics must be training or one of {sorted(ROBOT_DYNAMICS_PROFILES)}")
+    from src.wmac_perceptive.physics_checks import hfield_collision_status
+    hfield = hfield_collision_status()
+    if hfield["status"] == "needs_patch":
+        print("WARNING: unpatched MuJoCo-Warp heightfield collisions drop foot-terrain contacts; "
+              "results overstate stair/rough-terrain performance. Run scripts/fix_mujoco_warp_hfield.py --apply.",
+              file=sys.stderr)
     actor, cfg, payload = load_actor(args.checkpoint, args.device)
     locomotion=cfg.motion_scope=="forward_walk_turn_v1"
     if args.mode=="auto":args.mode="walk" if locomotion else "both"
@@ -364,6 +393,8 @@ def main(argv=None):
         "checkpoint_sha256":hashlib.sha256(args.checkpoint.read_bytes()).hexdigest(),
         "protocol":{"seed":args.seed, "num_envs":args.num_envs, "steps":args.steps,
             "device":args.device, "actor_only":True, "inference_precision":"float32, TF32 disabled",
+            "robot_dynamics":args.robot_dynamics, "terrain_geometry":args.terrain_geometry,
+            "hfield_collision":hfield,
             "visual_spec":asdict(actor.spec), "observation_noise":False, "pushes":False,
             "history":"physical pre-reset next frame appended; reset environments refill from post-reset frame",
             "first_episode":"terminal transition included, all reset episodes excluded",

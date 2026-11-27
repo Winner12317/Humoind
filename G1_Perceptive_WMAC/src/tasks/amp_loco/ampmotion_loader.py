@@ -18,16 +18,16 @@ class MotionLoader:
         device: str = "cpu",
         recovery_dir: str | None = None,
     ):
-        # 存储所有运动数据的列表
+        # Store the locomotion clips.
         self.motion_data: list[dict] = []
-        # 存储所有恢复数据的列表
+        # Store the recovery clips.
         self.motion_data_recovery: list[dict] = []
 
-        # 加载正常运动数据
+        # Load locomotion clips.
         self.motion_data = self._load_dir(motion_dir, device)
         assert len(self.motion_data) > 0, f"No npz files found in: {motion_dir}"
 
-        # 加载恢复运动数据
+        # Load recovery clips.
         if recovery_dir is not None and os.path.isdir(recovery_dir):
             self.motion_data_recovery = self._load_dir(recovery_dir, device)
 
@@ -54,7 +54,7 @@ class MotionLoader:
 
     @staticmethod
     def _load_dir(dir_path: str, device: str) -> list[dict]:
-        """从目录中加载所有 .npz 文件并返回运动数据列表。"""
+        """Load all .npz files in the directory and return the motion clips."""
         assert os.path.isdir(dir_path), f"Not a directory: {dir_path}"
         result = []
         for filename in sorted(os.listdir(dir_path)):
@@ -75,7 +75,7 @@ class MotionLoader:
         return result
 
     def _get_motion_data(self, motion_index: int = None):
-        """获取指定motion的数据，如果motion_index为None，则使用默认数据"""
+        """Return data for the selected motion, or the default data if motion_index is None."""
         if motion_index is None:
             return {
                 "body_pos_w": self._body_pos_w,
@@ -150,7 +150,7 @@ class MotionLoader:
         return data["body_ang_vel_w"][:, 0, :]
 
     def sample_random_frames(self, num_samples: int) -> dict[str, torch.Tensor]:
-        """从所有动作中随机抽取帧，返回 root pose/vel 和 joint pos/vel。
+        """Sample frames across all clips and return root poses, root velocities, joint positions, and joint velocities.
 
         Returns:
             dict with keys:
@@ -162,9 +162,9 @@ class MotionLoader:
                 joint_vel: (num_samples, num_joints)
         """
         all_motions = self.motion_data + self.motion_data_recovery
-        # 随机选 motion index
+        # Choose motion indices at random.
         motion_indices = torch.randint(0, len(all_motions), (num_samples,))
-        # 对每个选中的 motion 随机选一帧
+        # Sample one frame from each selected motion.
         result_root_pos = []
         result_root_quat = []
         result_root_lin_vel = []

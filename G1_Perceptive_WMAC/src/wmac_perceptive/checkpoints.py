@@ -28,7 +28,7 @@ from .perception import PerceptionSpec
 # they do not relabel the saved training objective, terrain or sensor history.
 MUTABLE_RESUME_FIELDS = frozenset((
     "iterations", "log_root", "run_name", "resume", "init_policy",
-    "device", "replay_device", "save_interval", "log_interval",
+    "device", "replay_device", "sim_device", "save_interval", "log_interval",
     "evaluation_interval", "evaluation_envs", "evaluation_steps",
     "mirrored_motion_root",
     "migrate_perception_training",
@@ -96,7 +96,9 @@ def architecture_metadata(cfg, spec: PerceptionSpec | None = None) -> dict:
         "ground_height_semantics": cfg.ground_height_semantics,
         "terrain": {"source_horizontal_scale_m":.05,
                     "collision_horizontal_scale_m":cfg.collision_horizontal_scale,
-                    "physical_depth":"rays against the same compiled collision heightfields",
+                    "physical_depth":("rays against Hiking's vertical-riser terrain mesh (non-colliding)"
+                        if getattr(cfg,"depth_geometry","collision")=="source_mesh"
+                        else "rays against the same compiled collision heightfields"),
                     "support_height":"decoded from those compiled heightfields"},
         "amp": {"schema": cfg.amp_feature_schema, "frame_dim": 203, "pair_dim": 406,
                 "expert_reference": "original-project flat-ground motions; mirrored walking, unchanged Recovery",
@@ -475,7 +477,10 @@ def architecture_metadata(cfg, spec: PerceptionSpec | None = None) -> dict:
     if cfg.hiking_training_version >= 3:
         metadata["architecture_version"] = 9
         metadata["commands"]["allocation"] = "Hiking terrain-specific command ranges, standing mask and yaw deadband"
-        metadata["robot_variant"] = "InstinctLab G1ParkourRoughEnvCfg (unshod)"
+        metadata["robot_variant"] = ("InstinctLab G1ParkourEnvCfg (shod, undelayed actuators)"
+            if getattr(cfg, "robot_variant", "unshod") == "shoe" else "InstinctLab G1ParkourRoughEnvCfg (unshod)")
+        if cfg.hiking_training_version >= 4:
+            metadata["terrain_edges"] = "Hiking source mesh (IsaacLab slope_threshold=1), merged as TerrainImporter"
         metadata["amp"].update(expert_reference="complete official Hiking walking sequence",
             expert_sampling="per-environment reference cursor, start in [0,.9] of duration, episode symmetry",
             update_budget="24 fresh vector steps, five epochs, four minibatches")
@@ -495,6 +500,18 @@ def architecture_metadata(cfg, spec: PerceptionSpec | None = None) -> dict:
         metadata["execution_protocol"]["critic_protocol"]["value_ceiling"] = (
             "(task_weight*dt*sum_positive_task_weights+style_weight*amp_reward_coef)/(1-gamma)")
         metadata["latent_decoder"]["output_activation"] = "sigmoid"
+    if getattr(cfg, "robot_dynamics_randomization", "none") != "none":
+        from .robot_dynamics import ROBOT_DYNAMICS_CONTEXT_WIDTH, robot_dynamics_metadata
+        width, extra = metadata["context_dim"], ROBOT_DYNAMICS_CONTEXT_WIDTH
+        metadata["context_dim"] = width + extra
+        metadata["context_layout"]["robot_dynamics"] = [width, width + extra]
+        metadata["world_model"]["input_dim"] += extra
+        metadata["critic"]["input_dim"] += extra
+        replay = metadata.get("execution_protocol", {}).get("replay", {})
+        if "fixed_context_columns" in replay:
+            replay["fixed_context_columns"] += extra
+            replay["context_dim"] = width + extra
+        metadata["robot_dynamics_randomization"] = robot_dynamics_metadata(cfg.robot_dynamics_randomization)
     return metadata
 
 

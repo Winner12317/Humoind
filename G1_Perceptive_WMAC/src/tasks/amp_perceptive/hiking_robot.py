@@ -1,4 +1,12 @@
-"""Official unshod Hiking G1 expressed in the pelvis-root GenCoord layout."""
+"""Hiking's G1, unshod or shod, expressed in the pelvis-root GenCoord layout.
+
+InstinctLab de6b92f ships two variants of the task robot. ``unshod`` is
+``G1ParkourRoughEnvCfg``'s ``g1_29dof_torsobase_popsicle.urdf``. ``shoe`` is
+``G1ParkourEnvCfg`` (the registered ``Instinct-Parkour-Target-Amp-G1-v0``), whose
+``ShoeConfigMixin`` swaps in ``g1_29dof_torsoBase_popsicle_with_shoe.urdf`` and
+lowers the foot measurements with it. The two URDFs differ only in the height
+of the seven collision capsules under each foot (z -0.025 -> -0.048 m).
+"""
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
@@ -9,12 +17,28 @@ import numpy as np
 from src.assets.robots.unitree_g1.g1_constants import G1_XML, get_spec
 
 HIKING_URDF = G1_XML.parent.parent / "g1_29dof_torsobase_popsicle.urdf"
+HIKING_SHOE_URDF = HIKING_URDF.with_name("g1_29dof_torsobase_popsicle_with_shoe.urdf")
+HIKING_SHOE_URDF_SHA256 = "ef88a3094280b966624f60f7179aa59b7b2536fc282cf9fefa0c71c75a0a40fb"
 HIKING_HEAD = HIKING_URDF.with_name("hiking_head_link.STL")
+# Foot measurements that ShoeConfigMixin changes together with the URDF:
+# z range of the 10 x 5 x 2 volume-point grid in the ankle-roll frame, and
+# feet_at_plane's height offset between that frame and the sole.
+HIKING_SHOE_SOLE_OFFSET = .023
+HIKING_FOOT_GEOMETRY = {
+    "unshod": {"urdf": HIKING_URDF, "volume_points_z": (-.04, 0.), "plane_height_offset": .035},
+    "shoe": {"urdf": HIKING_SHOE_URDF, "volume_points_z": (-.063, -.023), "plane_height_offset": .058},
+}
 
 
-def source_hiking_model():
+def hiking_foot_geometry(variant="unshod"):
+    if variant not in HIKING_FOOT_GEOMETRY:
+        raise ValueError(f"Unknown Hiking robot variant: {variant!r}")
+    return HIKING_FOOT_GEOMETRY[variant]
+
+
+def source_hiking_model(variant="unshod"):
     """Load pinned URDF physics and merge fixed-link inertias in MuJoCo."""
-    robot = ET.parse(HIKING_URDF).getroot()
+    robot = ET.parse(hiking_foot_geometry(variant)["urdf"]).getroot()
     for link in robot.findall("link"):
         for visual in link.findall("visual"):
             link.remove(visual)  # The MJCF supplies the Unitree render meshes.
@@ -25,8 +49,13 @@ def source_hiking_model():
     return mujoco.MjModel.from_xml_string(ET.tostring(robot, encoding="unicode"))
 
 
-def get_hiking_robot_spec():
-    source = source_hiking_model()
+def get_hiking_shoe_robot_spec():
+    """The shod variant; a named function because the scene stores a spec callable."""
+    return get_hiking_robot_spec("shoe")
+
+
+def get_hiking_robot_spec(variant="unshod"):
+    source = source_hiking_model(variant)
     spec = get_spec()
     # The other 34 visual mesh files and their transforms agree with the raw
     # URDF. Override the historical head mesh only on the v3 asset.
@@ -80,4 +109,10 @@ def get_hiking_robot_spec():
             joint.parent.quat = rotation
             joint.axis = -source.jnt_axis[i]
             joint.pos = offset
+    if variant == "shoe":
+        # The model's default pose stands on the soles. Raise it by the sole
+        # offset so the compiled rest state does not start inside the ground
+        # (MuJoCo-Warp sizes its constraint buffers from that state).
+        pelvis = spec.body("pelvis")
+        pelvis.pos = (pelvis.pos[0], pelvis.pos[1], pelvis.pos[2] + HIKING_SHOE_SOLE_OFFSET)
     return spec

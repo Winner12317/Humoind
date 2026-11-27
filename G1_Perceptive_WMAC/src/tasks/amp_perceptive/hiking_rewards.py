@@ -1,9 +1,11 @@
 """Hiking's 26 reward formulas, shared by physics and GenCoord imagination.
 
-Reference: InstinctLab de6b92f, parkour/config/parkour_env_cfg.py (plain G1,
-without the separate shoe mixin), and IsaacLab f73c331738.  Values returned
-here are unweighted; the reward manager or ``hiking_weighted_reward`` applies
-the listed weights and the control-step duration exactly once.
+Reference: InstinctLab de6b92f, parkour/config/parkour_env_cfg.py, and IsaacLab
+f73c331738. The foot measurements default to the plain G1; the shoe mixin's
+values arrive through ``foot_plane_height_offset`` and the volume-point grid.
+Values returned here are unweighted; the reward manager or
+``hiking_weighted_reward`` applies the listed weights and the control-step
+duration exactly once.
 
 Inputs are physical values, never biased encoder observations. Unavailable
 physics quantities are explicit supervised auxiliary labels; none are silently
@@ -104,7 +106,8 @@ def hiking_reward_terms(inputs: Mapping[str, torch.Tensor], auxiliary: torch.Ten
     distance_y = (-heading.sin() * separation[..., 0] + heading.cos() * separation[..., 1]).abs()
     hits = inputs["foot_ground_height"]
     hits = torch.where(torch.isinf(hits), 0., hits)
-    plane = (feet[..., :, 2, None] - hits - .035).clamp(0., .3).sum(-1)
+    # 0.035 m for the unshod foot, 0.058 m with ShoeConfigMixin.
+    plane = (feet[..., :, 2, None] - hits - inputs.get("foot_plane_height_offset", .035)).clamp(0., .3).sum(-1)
     limits = inputs["joint_position_limits"]
     deviation = q - qdefault
     raw = {

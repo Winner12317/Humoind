@@ -108,13 +108,17 @@ class RawPackedExportActor(nn.Module):
 
 def export_raw_packed_actor(actor: PerceptiveActor, path: str | Path, *,
                             input_name="proprio_and_depth_ring", output_name="actions",
-                            opset_version=18) -> RawPackedExportActor:
-    """Export a private CPU copy, leaving trained weights/modes/flags intact."""
+                            opset_version=18, dynamic_batch=True) -> RawPackedExportActor:
+    """Export a private CPU copy, leaving trained weights/modes/flags intact.
+
+    ``dynamic_batch=False`` fixes the batch at one, as unitree_rl_lab's C++
+    ``OrtRunner`` sizes its input tensors from the static ONNX shape.
+    """
     adapter = RawPackedExportActor(actor)
     # Keep the runner's existing raw FP32 input contract. The adapter casts
     # images/features to the saved network dtype internally, as the Actor does.
     sample = torch.zeros(1, adapter.input_width, dtype=torch.float32)
+    axes = {input_name: {0: "batch"}, output_name: {0: "batch"}} if dynamic_batch else None
     torch.onnx.export(adapter, sample, str(path), input_names=[input_name], output_names=[output_name],
-        dynamic_axes={input_name: {0: "batch"}, output_name: {0: "batch"}},
-        opset_version=opset_version, dynamo=False)
+        dynamic_axes=axes, opset_version=opset_version, dynamo=False)
     return adapter

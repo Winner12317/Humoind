@@ -43,7 +43,35 @@ HIKING_MOTION_PROTOCOL = "hiking_walk_v1"
 LEGACY_LOCOMOTION_OBJECTIVE = "legacy_walk_turn_v1"
 HIKING_STANDING_OBJECTIVE = "hiking_standing_v1"
 HIKING_FULL_OBJECTIVE = "hiking_full_v1"
-HIKING_TRAINING_VERSION = 3
+# Version 4 returns the task to the original Hiking implementation wherever the
+# simulator allows it (see ``HIKING_ALIGNED_VERSION`` uses and README): Hiking's
+# nominal pinhole camera, its single reference motion with per-environment
+# playback, terrain edges detected on Hiking's vertical-riser terrain mesh, and
+# the discriminator regularisation its trainer actually applies. Version 3 and
+# earlier checkpoints keep the protocol they were trained with.
+# Version 5 is version 4 with the defaults for training a policy for the
+# physical G1 (see ``HIKING_REAL_ROBOT_VERSION`` and README, "Real-robot
+# deployment"): the depth camera sees Hiking's vertical-riser mesh, collision
+# uses the 2.5 cm grid, and each robot's mass distribution and joint dynamics
+# are sampled around Unitree's G1 model. Each stays a separate flag, and
+# ``--hiking-training-version 4`` selects the plain Hiking-aligned task.
+HIKING_TRAINING_VERSION = 5
+HIKING_ALIGNED_VERSION = 4
+HIKING_REAL_ROBOT_VERSION = 5
+# Hiking ships two G1 task variants. "unshod" is G1ParkourRoughEnvCfg: bare
+# feet and reset-sampled actuator delay. "shoe" is G1ParkourEnvCfg, the variant
+# behind the registered task Instinct-Parkour-Target-Amp-G1-v0: soles 23 mm
+# lower (collision, foot volume points, foot-plane offset) and, because that
+# config swaps the robot after assigning actuators, no actuator delay.
+ROBOT_VARIANTS = ("unshod", "shoe")
+# Terrain the depth camera sees. "collision" is the MuJoCo heightfield the feet
+# touch, where every Hiking riser is a ramp one collision cell wide.
+# "source_mesh" is Hiking's own terrain mesh with vertical risers, added as
+# non-colliding geometry; pair it with --collision-horizontal-scale 0.025 so
+# what the feet touch stays within 2.5 cm of what the camera sees.
+DEPTH_GEOMETRIES = ("collision", "source_mesh")
+# "unitree_g1_v1": interpolate/extrapolate between the Hiking robot and unitree_mujoco's G1.
+ROBOT_DYNAMICS_RANDOMIZATIONS = ("none", "unitree_g1_v1")
 LEGACY_G1_STANDING_EXPERT = "legacy_g1_locked_v1"
 LEGACY_WALKING_EXPERT = "pre_hiking_local_walk_turn_v2"
 EXECUTION_FIELDS = frozenset((
@@ -100,6 +128,11 @@ def saved_training_config(saved):
     # continuous WM normalization and the original Hiking AMP sample budget.
     # Missing markers describe the historical 100D context and update rules.
     values.setdefault("hiking_training_version", 1)
+    # Checkpoints written before the Hiking depth mesh existed saw the collision heightfields.
+    values.setdefault("depth_geometry", "collision")
+    # Robot-dynamics randomization widens the world-model and critic context;
+    # a checkpoint that does not record it was trained without it.
+    values.setdefault("robot_dynamics_randomization", "none")
     values.setdefault("standing_expert_source", "none")
     values.setdefault("walking_expert_source", "none")
     if "execution_profile" not in values:
@@ -239,6 +272,25 @@ class PerceptiveConfig(WmacConfig):
     validation_min_recovery_samples: int = 0
     validation_min_walk_samples: int = 8
     ground_height_semantics: str = "per_point_terrain_v1"
+    # Opt-in robot dynamics randomization between the Hiking training robot and
+    # another G1 model (see src/wmac_perceptive/robot_dynamics.py). The sampled
+    # values are appended to the world-model/critic context; "none" reproduces
+    # every earlier run and checkpoint.
+    robot_dynamics_randomization: str = "none"
+    # Which of Hiking's two G1 task variants to simulate (see ROBOT_VARIANTS).
+    robot_variant: str = "unshod"
+    # What the depth camera's terrain rays hit (see DEPTH_GEOMETRIES): the
+    # collision heightfields, or Hiking's own vertical-riser terrain mesh.
+    depth_geometry: str = "collision"
+    # Device of the simulator (physics, depth rays, environment managers).
+    # Empty: the learner's ``device``. Another GPU, e.g. "cuda:1", keeps the
+    # simulator's memory off the learner's card (src/wmac/device_placement.py).
+    # Placement belongs to the machine, not the experiment: it is never
+    # restored from a checkpoint.
+    sim_device: str = ""
+    # MuJoCo-Warp 3.8.1 drops heightfield contacts unless patched. Training
+    # refuses that physics unless this is set; resumes never inherit it.
+    allow_unpatched_hfield: bool = False
 
     @classmethod
     def defaults(cls, execution_profile=LEGACY_EXECUTION_PROFILE, *, hiking_training_version=None):
@@ -264,8 +316,15 @@ class PerceptiveConfig(WmacConfig):
             cfg.standing_expert_source = "none"
             cfg.mirrored_motion_root = ".perceptive_cache/sources/hiking"
             if cfg.hiking_training_version >= 3:
-                cfg.sensor_protocol = G1_HIKING_CALIBRATED_SENSOR_PROTOCOL
-                cfg.walking_expert_source = LEGACY_WALKING_EXPERT
+                aligned = cfg.hiking_training_version >= HIKING_ALIGNED_VERSION
+                # Version 3 used the measured G1 RealSense intrinsics and added 13
+                # local clips to the reference pool; both remain selectable.
+                cfg.sensor_protocol = HIKING_SENSOR_PROTOCOL if aligned else G1_HIKING_CALIBRATED_SENSOR_PROTOCOL
+                cfg.walking_expert_source = "none" if aligned else LEGACY_WALKING_EXPERT
+                if cfg.hiking_training_version >= HIKING_REAL_ROBOT_VERSION:
+                    cfg.collision_horizontal_scale = .025
+                    cfg.depth_geometry = "source_mesh"
+                    cfg.robot_dynamics_randomization = "unitree_g1_v1"
                 cfg.action_limit = None
                 cfg.validation_env_fraction = 0.
                 cfg.iterations = 1_000_000  # Vector control steps.
@@ -282,7 +341,12 @@ class PerceptiveConfig(WmacConfig):
             cfg.amp_reward_coef = .25
             cfg.task_weight = cfg.style_weight = 1.
             cfg.discriminator_trunk_weight_decay = 3e-4
-            cfg.discriminator_head_weight_decay = .04
+            # Hiking configures 0.04 for the logit layer, but instinct_rl 574c8d5
+            # looks the coefficient up under a name that does not exist
+            # ("logit_weight_decay_coef") and so applies 1.0; 0.04 only switches
+            # the term on. Version 4 reproduces what the trainer executes.
+            cfg.discriminator_head_weight_decay = (
+                1. if cfg.hiking_training_version >= HIKING_ALIGNED_VERSION else .04)
             cfg.depth_noise_std_m = cfg.depth_dropout_probability = 0.
             cfg.num_envs, cfg.wm_batch_size, cfg.wm_updates = 4096, 2048, 10
             # Official horizon=8 counts state frames, i.e. seven transitions.
@@ -307,8 +371,24 @@ class PerceptiveConfig(WmacConfig):
 
     def validate(self):
         if (not isinstance(self.hiking_training_version,int) or isinstance(self.hiking_training_version, bool)
-                or self.hiking_training_version not in (1, 2, HIKING_TRAINING_VERSION)):
+                or self.hiking_training_version not in (1, 2, 3, 4, HIKING_TRAINING_VERSION)):
             raise ValueError("Unsupported Hiking training version")
+        if self.robot_variant not in ROBOT_VARIANTS:
+            raise ValueError(f"robot_variant must be one of {ROBOT_VARIANTS}")
+        if self.robot_variant != "unshod" and self.hiking_training_version < HIKING_ALIGNED_VERSION:
+            raise ValueError("The shoe robot variant requires Hiking training version 4")
+        if self.sim_device and self.sim_device != "cpu" and not self.sim_device.startswith("cuda"):
+            raise ValueError("sim_device must be empty, cpu or a CUDA device")
+        if self.sim_device and self.sim_device != self.device and self.hiking_training_version < 3:
+            raise ValueError("A separate simulator device requires the Hiking task (training version 3 or later)")
+        if self.depth_geometry not in DEPTH_GEOMETRIES:
+            raise ValueError(f"depth_geometry must be one of {DEPTH_GEOMETRIES}")
+        if self.depth_geometry != "collision" and self.hiking_training_version < 3:
+            raise ValueError("The Hiking depth mesh requires the Hiking task (training version 3 or later)")
+        if self.robot_dynamics_randomization not in ROBOT_DYNAMICS_RANDOMIZATIONS:
+            raise ValueError(f"robot_dynamics_randomization must be one of {ROBOT_DYNAMICS_RANDOMIZATIONS}")
+        if self.robot_dynamics_randomization != "none" and self.hiking_training_version < 3:
+            raise ValueError("Robot dynamics randomization requires the Hiking v3 task")
         if self.hiking_training_version >= 2 and (
                 self.execution_profile != "supermimic"
                 or self.locomotion_objective != HIKING_FULL_OBJECTIVE
@@ -325,7 +405,7 @@ class PerceptiveConfig(WmacConfig):
         values = {f.name: getattr(self, f.name) for f in fields(WmacConfig)}
         values["task"] = "Unitree-G1-AMP-Flat-Aligned"
         if self.actor_type == TRANSFORMER_ACTOR_TYPE:
-            if self.hiking_training_version != HIKING_TRAINING_VERSION or self.visual_mode != LATENT_VISUAL_MODE:
+            if self.hiking_training_version < 3 or self.visual_mode != LATENT_VISUAL_MODE:
                 raise ValueError("Transformer Actor requires the current Hiking latent training protocol")
             if self.moe_load_balance_coef != 0. or self.moe_router_z_coef != 0.:
                 raise ValueError("Transformer Actor has no MoE router auxiliary losses")
@@ -389,10 +469,13 @@ class PerceptiveConfig(WmacConfig):
         if self.terrain_rows < 1 or self.terrain_cols < 1:
             raise ValueError("Terrain dimensions must be positive")
         scale = self.collision_horizontal_scale
-        if self.locomotion_objective==HIKING_FULL_OBJECTIVE and not math.isclose(scale,.05,abs_tol=1e-10):
-            raise ValueError("Full Hiking terrain uses the original .05m grid; choose a historical task for coarse terrain")
-        minimum_scale=.05 if self.locomotion_objective==HIKING_FULL_OBJECTIVE else .1
-        if not math.isfinite(scale) or scale < minimum_scale or not math.isclose(scale/.05,round(scale/.05),abs_tol=1e-8) or not math.isclose(8./scale,round(8./scale),abs_tol=1e-8):
+        refined=(self.locomotion_objective==HIKING_FULL_OBJECTIVE and math.isclose(scale,.025,abs_tol=1e-10)
+                 and self.hiking_training_version >= 3)
+        if self.locomotion_objective==HIKING_FULL_OBJECTIVE and not refined and not math.isclose(scale,.05,abs_tol=1e-10):
+            raise ValueError("Full Hiking terrain collides on the original .05m grid, or from training version 3 "
+                             "on its .025m refinement; choose a historical task for coarse terrain")
+        minimum_scale=(.025 if refined else .05) if self.locomotion_objective==HIKING_FULL_OBJECTIVE else .1
+        if not refined and (not math.isfinite(scale) or scale < minimum_scale or not math.isclose(scale/.05,round(scale/.05),abs_tol=1e-8) or not math.isclose(8./scale,round(8./scale),abs_tol=1e-8)):
             raise ValueError("Collision grid must be at least 10cm, a finite multiple of 5cm dividing the 8m tile; 5cm overflows G1 fallen-body contacts")
         if self.motion_scope not in (LOCOMOTION_SCOPE,LEGACY_SCOPE):
             raise ValueError("Unknown perceptive motion_scope")
@@ -562,5 +645,9 @@ def config_from_payload(payload):
     defaults.init_policy = None
     defaults.migrate_perception_training = False
     defaults.migrate_world_model = False
+    # Physics checks are rerun for every process; a resume never inherits an override.
+    defaults.allow_unpatched_hfield = False
+    # Neither does it inherit where the previous process placed its simulator.
+    defaults.sim_device = ""
     defaults.validate()
     return defaults

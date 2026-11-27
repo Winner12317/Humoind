@@ -111,14 +111,15 @@ class PerceptiveRunner(WmacRunner):
             action_transform = None
             if cfg.hiking_training_version >= 3:
                 action_term = env.action_manager.get_term("joint_pos")
-                action_transform = (action_term.scale, action_term.offset)
+                action_transform = tuple(self._from_env(value) for value in (action_term.scale, action_term.offset))
             self.world_model=LatentPerceptiveWorldModel(self.adapter.terrain,self.spec,
                 hidden=cfg.model_hidden,latent_dim=cfg.latent_dim,
                 context_dim=getattr(self.adapter,"context_dim",35),
                 contact_dim=getattr(self.adapter,"contact_dim",2),
                 dt=cfg.dynamics_dt,decimation=cfg.dynamics_decimation,
                 continuous_normalization=cfg.hiking_training_version>=2,
-                action_transform=action_transform).to(self.device)
+                action_transform=action_transform,
+                robot_dynamics_columns=getattr(self.adapter,"robot_dynamics_columns",0)).to(self.device)
             shape=(self.spec.height-self.spec.crop_top-self.spec.crop_bottom,
                    self.spec.width-self.spec.crop_left-self.spec.crop_right)
             self.latent_decoder=InstinctLatentDecoder(cfg.latent_dim,self.spec.visual_channels*self.spec.frames,shape,
@@ -197,7 +198,7 @@ class PerceptiveRunner(WmacRunner):
                 width=self.spec.width-self.spec.crop_left-self.spec.crop_right,
                 crop_top=0,crop_bottom=0,crop_left=0,crop_right=0,blur_kernel=1)
         self.depth_history=DepthHistory(history_spec,env.num_envs,self.device)
-        self.current_depth=read_depth_frame(env).detach()
+        self.current_depth=self._from_env(read_depth_frame(env)).detach()
         self.depth_history.reset(self._policy_depth_frame(self.current_depth))
         if hasattr(self.replay,"bootstrap_reset") and not cfg.resume:
             frame=self.depth_history.ring[:,0]
@@ -482,15 +483,15 @@ class PerceptiveRunner(WmacRunner):
         totals=dict(real_task_reward=0.,terminated_fraction=0.,timeout_fraction=0.,recovery_fraction=0.,
                     boundary_fraction=0.,invalid_transition_fraction=0.,sensor_valid_fraction=0.,standing_command_fraction=0.)
         for _ in range(count):
-            proprio=self.env.obs_buf["actor"]
+            proprio=self._from_env(self.env.obs_buf["actor"])
             ring=self.depth_history.snapshot()
             packed=pack_actor_input(torch.nan_to_num(proprio),ring,self.spec)
             action=(self.actor(packed)+self.cfg.exploration_noise*torch.randn(self.env.num_envs,29,device=self.device))
             action=action.clamp(-self.cfg.action_limit,self.cfg.action_limit)
             if not bool(torch.isfinite(action).all()):raise RuntimeError("Non-finite perceptive policy action")
             current=self.current_depth.detach().clone()
-            self.env.step(action)
-            batch=self.env.transition
+            self.env.step(self._to_env(action))
+            batch=self._from_env(self.env.transition)
             if "command_standing" in batch:
                 totals["standing_command_fraction"]+=float(batch["command_standing"].float().mean())
             batch.update(depth_ring=ring.to(torch.float16),depth_frame=current.to(torch.float16))
@@ -503,7 +504,7 @@ class PerceptiveRunner(WmacRunner):
                 batch["command"][train],batch["context"][train]))
             # next_depth_frame is BEFORE reset, never replace that model label.
             # Only the next policy's ring is reset with its new-episode image.
-            self.current_depth=read_depth_frame(self.env).detach()
+            self.current_depth=self._from_env(read_depth_frame(self.env)).detach()
             done=batch["terminated"]|batch["timeout"]
             self.depth_history.append(self._augment_depth(self.current_depth),reset_mask=done)
             self.sim_steps+=self.env.num_envs
@@ -853,7 +854,32 @@ class PerceptiveRunner(WmacRunner):
             self._last_stall_warning_iteration=self.iteration
         return stalled
 
+    def _terrain_curriculum_metrics(self):
+        """Mean curriculum level per terrain family (Hiking logs these; one bincount per row)."""
+        terrain=getattr(self.env.scene,"terrain",None)
+        levels=getattr(terrain,"terrain_levels",None)
+        types=getattr(terrain,"terrain_types",None)
+        generator=getattr(getattr(terrain,"cfg",None),"terrain_generator",None)
+        if levels is None or types is None or generator is None or not getattr(generator,"curriculum",False):
+            return {}
+        if getattr(self,"_terrain_family_of_column",None) is None:
+            names=list(generator.sub_terrains)
+            weights=np.array([generator.sub_terrains[name].proportion for name in names],dtype=float)
+            cumulative=np.cumsum(weights/weights.sum())
+            # mjlab TerrainGenerator._generate_curriculum_terrains column allocation.
+            columns=[int(np.min(np.where(column/generator.num_cols+.001<cumulative)[0]))
+                     for column in range(generator.num_cols)]
+            self._terrain_family_names=names
+            self._terrain_family_of_column=torch.tensor(columns,device=types.device,dtype=torch.long)
+        family=self._terrain_family_of_column[types.long()]
+        count=len(self._terrain_family_names)
+        totals=torch.bincount(family,weights=levels.float(),minlength=count)
+        envs=torch.bincount(family,minlength=count).clamp_min(1)
+        return {f"terrain_level_{name}":value for name,value in
+                zip(self._terrain_family_names,(totals/envs).tolist())}
+
     def _log(self,row):
+        row.update(self._terrain_curriculum_metrics())
         stalled=self._check_actor_stall()
         row.update(actor_updates_accepted=self.actor_updates_accepted,actor_updates_rejected=self.actor_updates_rejected,
                    actor_update_stall_iterations=stalled,active_imagination_horizon=self._effective_horizon())
@@ -1244,7 +1270,7 @@ class PerceptiveRunner(WmacRunner):
             if hasattr(self,name):delattr(self,name)
         # Simulator resets require new camera history/replay and fresh domain
         # validation. Loaded values never certify a recreated scene.
-        self.current_depth=read_depth_frame(self.env).detach();self.depth_history.reset(self._policy_depth_frame(self.current_depth))
+        self.current_depth=self._from_env(read_depth_frame(self.env)).detach();self.depth_history.reset(self._policy_depth_frame(self.current_depth))
         if hasattr(self.replay,"bootstrap_reset") and not self.replay._bootstrapped:
             frame=self.depth_history.ring[:,0]
             self.replay.bootstrap_reset(frame if self.spec.include_valid else frame[:,:1])
@@ -1303,6 +1329,12 @@ class PerceptiveRunner(WmacRunner):
             metadata.pop("recovery_height_reward",None)
             metadata["command_bounds"]=json.dumps(architecture_metadata(self.cfg,self.spec)["commands"])
         attach_metadata_to_onnx(str(path),metadata)
+        if self.uses_full_hiking_task and self.cfg.hiking_training_version>=3:
+            # Joint sign conventions, torso-frame IMU and depth rules for Unitree-convention harnesses.
+            from .unitree_interface import deployment_contract
+            contract=deployment_contract(camera=architecture.get("camera"))
+            contract["training_robot_dynamics_randomization"]=self.cfg.robot_dynamics_randomization
+            (Path(path).parent/"deployment_contract.json").write_text(json.dumps(contract,indent=1)+"\n")
 
     def update_actor_critic(self, update_actor=True):
         self._ensure_training_progress()

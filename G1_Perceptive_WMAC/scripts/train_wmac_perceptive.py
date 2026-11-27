@@ -78,10 +78,18 @@ def parse_config(argv=None):
     resume_standing_expert_source=defaults.standing_expert_source
     resume_walking_expert_source=defaults.walking_expert_source
     resume_hiking_training_version=defaults.hiking_training_version
+    resume_robot_dynamics_randomization=defaults.robot_dynamics_randomization
+    resume_robot_variant=defaults.robot_variant
     cfg=tyro.cli(PerceptiveConfig,default=defaults,args=arguments)
     cfg.apply_preset()
     if selected.resume and selected.resume!="None" and cfg.hiking_training_version != resume_hiking_training_version:
         raise ValueError("Ordinary resume cannot change hiking_training_version; start a fresh experiment for the new training protocol")
+    if (selected.resume and selected.resume!="None"
+            and cfg.robot_dynamics_randomization != resume_robot_dynamics_randomization):
+        raise ValueError("Ordinary resume cannot change robot_dynamics_randomization (it widens the world-model "
+                         "and critic context); start a fresh experiment")
+    if selected.resume and selected.resume!="None" and cfg.robot_variant != resume_robot_variant:
+        raise ValueError("Ordinary resume cannot change robot_variant; start a fresh experiment")
     if selected.resume and selected.resume!="None" and cfg.visual_mode != resume_visual_mode:
         raise ValueError("Ordinary resume cannot change visual_mode; Instinct-latent training starts a fresh experiment")
     if selected.resume and selected.resume!="None" and cfg.actor_type != resume_actor_type:
@@ -146,12 +154,16 @@ def make_environment(cfg,*,play=False,mode=None,env_config_transform=None):
         paths=prepare(ROOT/"src/assets/motions/g1/amp",cfg.motion_root(ROOT))
     env_cfg=g1_amp_perceptive_hiking_env_cfg(play=play,motion_scope=cfg.motion_scope,
         sensor_protocol=cfg.sensor_protocol,motion_data_protocol=cfg.motion_data_protocol,
-        locomotion_objective=cfg.locomotion_objective, hiking_training_version=cfg.hiking_training_version)
+        locomotion_objective=cfg.locomotion_objective, hiking_training_version=cfg.hiking_training_version,
+        robot_variant=getattr(cfg,"robot_variant","unshod"),
+        collision_horizontal_scale=cfg.collision_horizontal_scale,
+        depth_geometry=getattr(cfg,"depth_geometry","collision"))
     env_cfg.seed=cfg.seed;env_cfg.scene.num_envs=cfg.num_envs
     env_cfg.scene.terrain.terrain_generator=hiking_terrain_generator(
         seed=cfg.seed,rows=cfg.terrain_rows,cols=cfg.terrain_cols,recovery_flat_fraction=cfg.recovery_flat_fraction,
         collision_horizontal_scale=cfg.collision_horizontal_scale,walking_only=locomotion,
-        task_protocol=cfg.locomotion_objective)
+        task_protocol=cfg.locomotion_objective,
+        depth_source_mesh=getattr(cfg,"depth_geometry","collision")=="source_mesh")
     if play and cfg.hiking_training_version >= 3:
         from src.tasks.amp_perceptive.hiking_task import configure_hiking_play_terrain
         configure_hiking_play_terrain(env_cfg.scene.terrain.terrain_generator)
@@ -169,12 +181,35 @@ def make_environment(cfg,*,play=False,mode=None,env_config_transform=None):
         env_cfg.events.pop("push_robot",None)
         if cfg.hiking_training_version < 3:
             env_cfg.curriculum={}
+    env_cfg._robot_dynamics_randomization=getattr(cfg,"robot_dynamics_randomization","none")
+    if env_cfg._robot_dynamics_randomization!="none" and not play:
+        from mjlab.managers.event_manager import EventTermCfg
+        from src.wmac_perceptive.robot_dynamics import randomize_robot_dynamics
+        env_cfg.events["robot_dynamics"]=EventTermCfg(func=randomize_robot_dynamics,mode="startup",
+            params={"randomization":env_cfg._robot_dynamics_randomization})
     if env_config_transform is not None:
         env_cfg=env_config_transform(env_cfg)
-    env=PerceptiveCaptureEnv(cfg=env_cfg,device=cfg.device)
+    env=PerceptiveCaptureEnv(cfg=env_cfg,device=getattr(cfg,"sim_device","") or cfg.device)
     env.adapter=PerceptiveStateAdapter(env,recovery_counter_semantics=cfg.recovery_counter_semantics,
         motion_scope=cfg.motion_scope,amp_feature_schema=cfg.amp_feature_schema)
     return env
+
+
+def assign_devices(cfg,environment):
+    """Expose only the cards this run uses and renumber them from zero.
+
+    The learner (with replay) becomes cuda:0 and a separate simulator card
+    cuda:1. A caller who already set CUDA_VISIBLE_DEVICES keeps its numbering.
+    """
+    if cfg.device.startswith("cuda") and "CUDA_VISIBLE_DEVICES" not in environment:
+        learner=cfg.device.partition(":")[2] or "0"
+        visible=[learner]
+        if cfg.sim_device.startswith("cuda"):
+            simulator=cfg.sim_device.partition(":")[2] or "0"
+            if simulator!=learner:visible.append(simulator)
+            cfg.sim_device=f"cuda:{visible.index(simulator)}"
+        environment["CUDA_VISIBLE_DEVICES"]=",".join(visible);cfg.device="cuda:0"
+    if cfg.sim_device==cfg.device:cfg.sim_device=""
 
 
 def snapshot_sources(log_dir,cfg=None):
@@ -187,11 +222,18 @@ def snapshot_sources(log_dir,cfg=None):
         shutil.copytree(ROOT/"src/assets/cameras",log_dir/"source/src/assets/cameras")
     if getattr(cfg, "hiking_training_version", 1) >= 3:
         for asset in ("robots/unitree_g1/g1_29dof_torsobase_popsicle.urdf",
+                      "robots/unitree_g1/g1_29dof_torsobase_popsicle_with_shoe.urdf",
                       "robots/unitree_g1/hiking_head_link.STL",
                       "motions/g1/hiking_official/SOURCE_MANIFEST.json"):
             target = log_dir / "source/src/assets" / asset
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / "src/assets" / asset, target)
+    if getattr(cfg,"robot_dynamics_randomization","none")!="none":
+        from src.wmac_perceptive.robot_dynamics import ROBOT_DYNAMICS_PROFILES,ROBOT_DYNAMICS_RANDOMIZATION_SETTINGS
+        profile=ROBOT_DYNAMICS_PROFILES[ROBOT_DYNAMICS_RANDOMIZATION_SETTINGS[cfg.robot_dynamics_randomization]["profile"]]
+        target=log_dir/"source/src/assets/robots/unitree_g1"/profile.name
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(profile,target)
     scripts=log_dir/"source/scripts";scripts.mkdir(parents=True,exist_ok=True)
     for name in ("train_wmac_perceptive.py","prepare_mirrored_motions.py","evaluate_wmac_perceptive.py",
                  "play_wmac_perceptive.py","check_wmac_perceptive_training.py","evaluate_wmac_zero_start.py"):
@@ -287,10 +329,23 @@ def snapshot_sources(log_dir,cfg=None):
             "RPL-inspired pixel/camera randomization adapted to Hiking64x36 and18x32 ROI; no RPL resolution, clipping, normalization or timing",
             "Camera DR ranges are explicit RPL-derived starting ranges, not original Hiking parameters or measured mounting uncertainty"]
     if cfg.hiking_training_version >= 3:
-        metadata["hiking_task"] = "G1ParkourRoughEnvCfg"
-        metadata["robot_variant"] = "upstream_unshod_G1"
+        shod = getattr(cfg, "robot_variant", "unshod") == "shoe"
+        metadata["hiking_task"] = "G1ParkourEnvCfg" if shod else "G1ParkourRoughEnvCfg"
+        metadata["robot_variant"] = "upstream_shod_G1_undelayed_actuators" if shod else "upstream_unshod_G1"
         from src.wmac_perceptive.locomotion_data import HIKING_SOURCE_SHA256
-        robot_assets = ("g1_29dof_torsobase_popsicle.urdf", "hiking_head_link.STL")
+        robot_assets = (("g1_29dof_torsobase_popsicle_with_shoe.urdf" if shod else "g1_29dof_torsobase_popsicle.urdf"),
+                        "hiking_head_link.STL")
+        if cfg.hiking_training_version >= 4:
+            metadata["hiking_alignment"] = {
+                "camera": cfg.sensor_protocol,
+                "terrain_edges": "GreedyconcatEdgeCylinder on Hiking's slope_threshold=1 terrain mesh",
+                "collision_geometry": (f"MuJoCo heightfield on a {cfg.collision_horizontal_scale} m grid; "
+                                       "a vertical riser is a ramp one grid cell wide"),
+                "depth_geometry": ("Hiking's vertical-riser terrain mesh (non-colliding)"
+                                   if cfg.depth_geometry == "source_mesh" else "the collision heightfield"),
+                "discriminator_logit_weight_l2": cfg.discriminator_head_weight_decay,
+                "initial_terrain_level": "sampled level minus one, as IsaacLab's first reset",
+            }
         metadata["robot_asset_sha256"] = {name: hashlib.sha256(
             (log_dir / "source/src/assets/robots/unitree_g1" / name).read_bytes()).hexdigest()
             for name in robot_assets}
@@ -322,10 +377,12 @@ def main(cfg):
     import torch
     from mjlab.utils.torch import configure_torch_backends
     from src.wmac_perceptive.runner import PerceptiveRunner
+    from src.wmac_perceptive.physics_checks import require_fixed_hfield_collision
     cfg.validate()
+    # Before any log directory exists: refuse physics that drops terrain contacts.
+    hfield=require_fixed_hfield_collision(cfg.allow_unpatched_hfield)
     os.environ.setdefault("MUJOCO_GL","egl");os.environ.setdefault("OMP_NUM_THREADS","1")
-    if cfg.device.startswith("cuda") and "CUDA_VISIBLE_DEVICES" not in os.environ:
-        os.environ["CUDA_VISIBLE_DEVICES"]=cfg.device.partition(":")[2] or "0";cfg.device="cuda:0"
+    assign_devices(cfg,os.environ)
     random.seed(cfg.seed);np.random.seed(cfg.seed);torch.manual_seed(cfg.seed)
     if cfg.device.startswith("cuda"):
         if not torch.cuda.is_available():raise RuntimeError("CUDA unavailable")
@@ -345,8 +402,11 @@ def main(cfg):
     if cfg.hiking_training_version >= 3:
         reference = ("Hiking and historical walking references" if cfg.walking_expert_source == LEGACY_WALKING_EXPERT
                      else "official Hiking walking reference")
-        print(f"[Perceptive WMAC] Hiking unshod G1 task, camera={cfg.sensor_protocol}, "
-              f"{reference}. Iterations count vector control steps.", flush=True)
+        robot = "shod G1 (no actuator delay)" if cfg.robot_variant == "shoe" else "unshod G1"
+        terrain = (f"collision grid {cfg.collision_horizontal_scale} m, depth sees "
+                   f"{'Hiking riser mesh' if cfg.depth_geometry == 'source_mesh' else 'collision heightfield'}")
+        print(f"[Perceptive WMAC] Hiking v{cfg.hiking_training_version} task, {robot}, camera={cfg.sensor_protocol}, "
+              f"{terrain}, {reference}. Iterations count vector control steps.", flush=True)
     elif cfg.hiking_training_version>=2:
         print("[Perceptive WMAC] Hiking training v2: per-geom friction conditioning, coherent soft imagined termination, continuous WM statistics, AMP 24-step rollouts x 5 epochs.",flush=True)
     elif cfg.resume:
@@ -358,6 +418,14 @@ def main(cfg):
     if cfg.actor_type == TRANSFORMER_ACTOR_TYPE:
         print("[Perceptive WMAC] Transformer Actor uses state-conditioned readout over proprioception, depth and command tokens.",
               flush=True)
+    print(f"[Perceptive WMAC] heightfield collisions: {hfield['status']} (mujoco-warp {hfield['mujoco_warp_version']})",
+          flush=True)
+    if cfg.robot_dynamics_randomization!="none":
+        print(f"[Perceptive WMAC] robot dynamics randomization: {cfg.robot_dynamics_randomization} "
+              "(startup-only; sampled values condition the world model and critic, not the Actor)",flush=True)
+    if cfg.sim_device:
+        print(f"[Perceptive WMAC] placement: simulator on {cfg.sim_device}; learner and replay on {cfg.device} "
+              f"(CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES','unset')})",flush=True)
     env=runner=None;started=time.perf_counter();complete=False;failure=None
     if cfg.device.startswith("cuda"):torch.cuda.reset_peak_memory_stats()
     try:
@@ -376,11 +444,15 @@ def main(cfg):
         failure={"type":type(error).__name__,"message":str(error)}
         raise
     finally:
-        runtime=dict(completed=complete,wall_seconds=time.perf_counter()-started)
+        runtime=dict(completed=complete,wall_seconds=time.perf_counter()-started,hfield_collision=hfield)
         if failure is not None:runtime["error"]=failure
         if cfg.device.startswith("cuda"):
-            runtime["torch_cuda_peak_allocated_bytes"]=torch.cuda.max_memory_allocated()
-            runtime["torch_cuda_peak_reserved_bytes"]=torch.cuda.max_memory_reserved()
+            runtime["torch_cuda_peak_allocated_bytes"]=torch.cuda.max_memory_allocated(cfg.device)
+            runtime["torch_cuda_peak_reserved_bytes"]=torch.cuda.max_memory_reserved(cfg.device)
+            runtime["devices"]={"learner_and_replay":cfg.device,"simulator":cfg.sim_device or cfg.device}
+            # Whole-card use as the driver sees it: PyTorch, the simulator and CUDA graphs together.
+            runtime["gpu_memory_used_bytes"]={name:(lambda free,total:total-free)(*torch.cuda.mem_get_info(name))
+                for name in dict.fromkeys((cfg.device,cfg.sim_device or cfg.device)) if name.startswith("cuda")}
             runtime["torch_memory_scope"]="PyTorch allocator; external simulator/driver allocations are additional"
         if runner is not None and runner.uses_fast_execution:
             execution=runner._latent_wm_execution

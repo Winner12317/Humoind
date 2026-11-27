@@ -51,9 +51,26 @@ class PerceptiveExecutionProtocolTest(unittest.TestCase):
         self.assertEqual((cfg.wm_updates, cfg.wm_window, cfg.imagination_horizon, cfg.validation_horizon), (10, 7, 32, 32))
         self.assertEqual((cfg.actor_microbatch_size, cfg.replay_steps, cfg.replay_device), (0, 1000, "cuda:0"))
         self.assertEqual((cfg.replay_storage, cfg.compile, cfg.precision), ("frame_uint8", True, "tf32"))
-        self.assertEqual(cfg.sensor_protocol, G1_HIKING_CALIBRATED_SENSOR_PROTOCOL)
+        # Version 4 is Hiking's own camera and reference motion; version 3 keeps
+        # the measured intrinsics and the supplemented reference pool.
+        self.assertEqual((cfg.sensor_protocol, cfg.walking_expert_source, cfg.discriminator_head_weight_decay,
+                          cfg.robot_variant), ("hiking_depth_only_v1", "none", 1., "unshod"))
+        previous = parse_config(["--hiking-training-version", "3"])
+        self.assertEqual((previous.sensor_protocol, previous.walking_expert_source,
+                          previous.discriminator_head_weight_decay),
+                         (G1_HIKING_CALIBRATED_SENSOR_PROTOCOL, "pre_hiking_local_walk_turn_v2", .04))
+        # Version 4 is the Hiking-aligned task; version 5 adds the real-robot defaults on top.
+        aligned = parse_config(["--hiking-training-version", "4"])
+        self.assertEqual({name: value for name, value in asdict(previous).items() if value != asdict(aligned)[name]}.keys(),
+                         {"hiking_training_version", "sensor_protocol", "walking_expert_source",
+                          "discriminator_head_weight_decay"})
+        self.assertEqual({name: (asdict(aligned)[name], value) for name, value in asdict(cfg).items()
+                          if value != asdict(aligned)[name]},
+                         {"hiking_training_version": (4, 5), "collision_horizontal_scale": (.05, .025),
+                          "depth_geometry": ("collision", "source_mesh"),
+                          "robot_dynamics_randomization": ("none", "unitree_g1_v1")})
         self.assertIsNone(cfg.action_limit)
-        self.assertEqual((cfg.hiking_training_version, cfg.iterations, cfg.validation_env_fraction), (3, 1_000_000, 0.))
+        self.assertEqual((cfg.hiking_training_version, cfg.iterations, cfg.validation_env_fraction), (5, 1_000_000, 0.))
         historical = parse_config(["--hiking-training-version", "2"])
         self.assertEqual((historical.sensor_protocol, historical.action_limit), (G1_HIKING_DR_SENSOR_PROTOCOL, 20.))
         self.assertGreater(historical.validation_env_fraction, 0.)

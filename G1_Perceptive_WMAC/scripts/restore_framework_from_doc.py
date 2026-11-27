@@ -13,7 +13,7 @@ import tarfile
 
 PUBLIC_REPOSITORY = 'https://github.com/ccrpRepo/AMP_mjlab.git'
 PUBLIC_COMMIT = '6c7a2947fccc973e4af8e6d90e550400f1b6fcfc'
-ARCHIVE_SHA256 = '25dd6daa429364a4e8861f9603e72f82f10e73d04efb89466a1807656b51518f'
+ARCHIVE_SHA256 = 'ecd718333366994ea664539efcc683941364af02d42b1e8a86c7f8954e9ceacc'
 
 
 def checked_members(package):
@@ -104,6 +104,8 @@ def main():
             run('git','-C',str(destination),'remote','add','origin',PUBLIC_REPOSITORY)
             run('git','-C',str(destination),'fetch','--depth=1','origin',PUBLIC_COMMIT)
             run('git','-C',str(destination),'checkout','--quiet','--detach','FETCH_HEAD')
+        # The English README incorporates the separate README from the public base.
+        (destination / 'README_zh.md').unlink(missing_ok=True)
         unpack(overlay, destination)
         for name, expected in manifest['source_files'].items():
             path = destination / name
@@ -123,6 +125,8 @@ def main():
         restorer = destination / 'scripts/restore_framework_from_doc.py'
         restorer.write_bytes(Path(__file__).resolve().read_bytes())
         restorer.chmod(0o755)
+        handbook = destination / 'reproduce/FRAMEWORK_REPRODUCTION.md'
+        handbook.write_bytes(args.document.read_bytes())
         print('Verified',len(manifest['source_files']),'source/asset files.')
         print('Verified payload SHA256:',actual)
         print('Restored to:',destination)

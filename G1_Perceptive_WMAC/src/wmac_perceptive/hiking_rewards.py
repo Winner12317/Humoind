@@ -30,6 +30,14 @@ def initialize_hiking_reward_adapter(adapter):
         dtype=adapter.default_joint_pos.dtype, device=adapter.device)
     adapter.hiking_foot_scanner_starts = adapter.default_joint_pos.new_tensor(
         [[-.02, 0., 20.], [.10, 0., 20.]])
+    # Unshod or shod foot measurements (ShoeConfigMixin lowers both by 23 mm).
+    from src.tasks.amp_perceptive.hiking_robot import hiking_foot_geometry
+    from .safety import hiking_foot_point_grid
+    geometry = hiking_foot_geometry(
+        getattr(getattr(adapter.env, "cfg", None), "_hiking_robot_variant", "unshod"))
+    adapter.hiking_foot_points = hiking_foot_point_grid(
+        geometry["volume_points_z"], device=adapter.device, dtype=adapter.default_joint_pos.dtype)
+    adapter.hiking_foot_plane_offset = geometry["plane_height_offset"]
 
 
 def hiking_foot_ground_height(kinematics, foot_ids, terrain, scanner_starts):
@@ -69,7 +77,8 @@ def hiking_reward_inputs(adapter, state, next_state, action, previous_action,
         # Upstream VolumePoints starts from PhysX COM velocity, then adds the
         # cross product about the LINK origin. Keep that exact source formula.
         "volume_points_penetration": hiking_foot_edge_cost(fk, feet, adapter.terrain,
-                                                          foot_linear_velocity=foot_velocity),
+            foot_points=getattr(adapter, "hiking_foot_points", None), foot_linear_velocity=foot_velocity),
+        "foot_plane_height_offset": getattr(adapter, "hiking_foot_plane_offset", .035),
         "joint_position": next_state[..., 13:42],
         "default_joint_position": adapter.default_joint_pos,
         "joint_velocity": next_state[..., 42:71],

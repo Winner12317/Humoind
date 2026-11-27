@@ -222,16 +222,18 @@ class MaterialCheckpointProtocolTest(unittest.TestCase):
         self.assertEqual(validate_checkpoint(self.payload(cfg), cfg), {})
 
     def test_unshod_v3_records_reference_input_protocol_and_actual_geom_names(self):
-        cfg = parse_config([])
-        meta = architecture_metadata(cfg)
-        names = list(hiking_material_geom_names(3))
-        self.assertEqual((cfg.hiking_training_version, meta["architecture_version"]), (3, 9))
-        self.assertEqual(len(names), 29)
-        self.assertEqual(meta["context_layout"]["applied_collision_sliding_friction"], [100, 129])
-        self.assertEqual(meta["material_conditioning"]["geom_names"], names)
-        self.assertEqual((meta["context_dim"], meta["world_model"]["input_normalizer_dim"],
-                          meta["world_model"]["input_dim"], meta["critic"]["input_dim"]), (129, 97, 435, 281))
-        self.assertEqual(validate_checkpoint(self.payload(cfg), cfg), {})
+        # Version 4 changes the task, not the network inputs: same layout as v3.
+        for version in (3, 4):
+            cfg = parse_config(["--hiking-training-version", str(version)])
+            meta = architecture_metadata(cfg)
+            names = list(hiking_material_geom_names(version))
+            self.assertEqual((cfg.hiking_training_version, meta["architecture_version"]), (version, 9))
+            self.assertEqual(len(names), 29)
+            self.assertEqual(meta["context_layout"]["applied_collision_sliding_friction"], [100, 129])
+            self.assertEqual(meta["material_conditioning"]["geom_names"], names)
+            self.assertEqual((meta["context_dim"], meta["world_model"]["input_normalizer_dim"],
+                              meta["world_model"]["input_dim"], meta["critic"]["input_dim"]), (129, 97, 435, 281))
+            self.assertEqual(validate_checkpoint(self.payload(cfg), cfg), {})
 
     def test_missing_version_marker_remains_historical_and_cross_resume_is_rejected(self):
         latest = parse_config([])
