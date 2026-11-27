@@ -2,6 +2,8 @@
 
 from time import perf_counter
 
+from .compact_gpu_replay import NoCompleteReferenceWindow
+
 
 def learn_reference(runner):
     """Count vector steps as in SuperMimic's runner and Ratio scheduler."""
@@ -16,6 +18,8 @@ def learn_reference(runner):
     initial_iteration = runner.iteration
     last_report_iteration = initial_iteration
     last_report_wall = runner.wall_time
+    first_missing_window_step = None
+    last_window_error = ""
     for step in range(start_step, cfg.iterations):
         iteration_before_step = runner.iteration
         started = perf_counter()
@@ -40,7 +44,23 @@ def learn_reference(runner):
         if runner.replay.size >= cfg.wm_window + 1:
             for _ in range(repeats):
                 begun = perf_counter()
-                row = runner.fit_model()
+                try:
+                    row = runner.fit_model()
+                except NoCompleteReferenceWindow as exc:
+                    # Replay is constant across all updates at this vector step.
+                    # The sampling exception is raised before any model update.
+                    last_window_error = str(exc)
+                    if first_missing_window_step is None:
+                        first_missing_window_step = step
+                        print(f"[WMAC] vector_step={step + 1}: {exc}. Continuing collection.", flush=True)
+                    elif step - first_missing_window_step >= runner.replay.capacity_steps:
+                        raise RuntimeError(
+                            f"World-model training could not resume by vector step {step + 1}. "
+                            f"First unavailable update at step {first_missing_window_step + 1}; "
+                            f"at least one full replay buffer has since been collected. {exc}"
+                        ) from exc
+                    break
+                first_missing_window_step = None
                 after_model = perf_counter()
                 imagined_before = runner.imagination_steps
                 policy = runner.update_actor_critic(update_actor=True)
@@ -88,6 +108,12 @@ def learn_reference(runner):
                 disc_counts = dict.fromkeys(disc_counts, 0)
                 collected = 0
                 collect_seconds = disc_seconds = 0.
+        if first_missing_window_step is not None and step + 1 == cfg.iterations:
+            raise RuntimeError(
+                f"World-model training could not resume by vector step {step + 1}. "
+                f"First unavailable update at step {first_missing_window_step + 1}; "
+                f"last attempted update: {last_window_error}"
+            )
         # Finish all updates for this control step before saving so the
         # checkpoint's simulation and update clocks can resume together.
         crossed_save_interval = (

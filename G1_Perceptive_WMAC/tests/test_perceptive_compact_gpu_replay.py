@@ -8,7 +8,7 @@ import unittest
 
 import torch
 
-from src.wmac_perceptive.compact_gpu_replay import CompressedLatentReplay
+from src.wmac_perceptive.compact_gpu_replay import CompressedLatentReplay, NoCompleteReferenceWindow
 from src.wmac_perceptive.latent_perception import processed_depth_stack, unpack_processed_actor_input
 from src.wmac_perceptive.latent_replay import LatentPerceptiveReplay
 from src.wmac_perceptive.perception import PerceptionSpec, advance_depth_ring, select_depth_frames
@@ -101,6 +101,18 @@ class CompressedReplayOracleMixin:
 
 
 class CompressedReplayCpuTest(CompressedReplayOracleMixin, unittest.TestCase):
+    def test_missing_reference_window_counts_only_candidate_training_transitions(self):
+        replay, _ = replay_pair(steps=9, capacity=12, invalid=False)
+        # The fixture terminates env 0 at t=1 and times out env 1 at t=4.
+        replay._valid[3, 2] = False
+        replay._cut_rows[4, 2] = True
+        replay._valid[:, 3] = False  # held-out environment
+        replay._cut_rows[8] = True  # last frame does not supply an action
+        with self.assertRaisesRegex(
+            NoCompleteReferenceWindow, "invalid=1, terminated=1, timeout=1, explicit_cut=1"
+        ):
+            replay.sample_reference_model_windows(4, 7)
+
     def test_reference_model_requires_complete_physics_windows_and_uniform_envs(self):
         replay, _ = replay_pair(steps=12, capacity=12, invalid=False)
         batch = replay.sample_reference_model_windows(12000, 3, fields=("terminated", "timeout", "boundary"))

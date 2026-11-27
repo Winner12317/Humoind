@@ -52,6 +52,7 @@ PY
 # Applied by default (see the top of this file). The audited environment was
 # unpatched; --keep-unpatched-hfield leaves it that way and only checks it.
 "$amp_python" scripts/fix_mujoco_warp_hfield.py "$amp_hfield_action"
+"$amp_python" reproduce/fix_mjlab_cuda_stream.py --apply
 "$amp_python" -m pip check
 "$amp_python" - <<'PY'
 import torch,rsl_rl,sys
@@ -72,7 +73,7 @@ CUDA_VISIBLE_DEVICES="" PYTHONPATH="$amp_root:$amp_root/tests" "$amp_python" -m 
   test_hiking_bundled_source test_hiking_amp test_hiking_observations \
   test_hiking_standing_expert \
   test_hiking_full_world_model test_hiking_depth_randomization \
-  test_perceptive_reference_schedule test_mujoco_warp_hfield_fix \
+  test_perceptive_reference_schedule test_mujoco_warp_hfield_fix test_mjlab_cuda_stream_fix \
   test_hiking_reference_robot test_hiking_alignment_v4 test_hiking_real_robot_options test_device_placement test_perceptive_attention_policy \
   test_hiking_depth_capture_execution test_hiking_vector_clock \
   test_replay_sampling_execution test_wm_macro_direct_staging \

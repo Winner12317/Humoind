@@ -44,6 +44,22 @@ python scripts/train_wmac_perceptive.py --execution-profile supermimic --num-env
 - **What was tested.** The split ran end to end here with the simulator on the CPU and the learner on the GPU, including CUDA-graph execution, checkpoints, resume and export. This machine has one GPU, so two CUDA cards were never used together. Run the two-minute smoke on the server first: `bash reproduce/smoke-local.sh --device cuda:0 --sim-device cuda:1`.
 - **More than two cards.** A run uses two. With four cards, start two runs (`--device cuda:0 --sim-device cuda:1` and `--device cuda:2 --sim-device cuda:3`), for example two seeds. Splitting one simulation across several cards is not implemented.
 
+### Troubleshooting the first update on two GPUs
+
+The v5 world model needs seven consecutive usable transitions in a single episode and the following state frame in replay. If the first batch contains no such sequence, the trainer continues collecting and retries on its normal update schedule. If the condition persists, the error reports counts of invalid transitions, episode terminations, timeouts and explicit replay cuts. These counts can overlap.
+
+For an existing installation, activate the environment, apply the mjlab CUDA stream fix and run the short diagnostic on the affected pair. A fresh installation applies the fix automatically.
+
+```bash
+source reproduce/activate.sh
+python reproduce/fix_mjlab_cuda_stream.py --apply
+set -o pipefail
+CUDA_VISIBLE_DEVICES=2,3 python reproduce/diagnose-hiking-smoke.py \
+  --device cuda:0 --sim-device cuda:1 2>&1 | tee hiking-gpu23-trace.log
+```
+
+The trace compares the simulator and learner copies, counts eligible episode windows, and compares sampled actor observations against their original values. It synchronizes the cards for inspection. After a successful trace, use the ordinary 200-step smoke on the same pair to check asynchronous execution before the full run.
+
 ## Sim-to-sim in MuJoCo with Unitree's G1 model
 
 The training robot is Hiking's torso-rooted G1. Unitree's MJCF and SDK follow a different convention, so a harness must convert between them. Use [`src/wmac_perceptive/unitree_interface.py`](src/wmac_perceptive/unitree_interface.py), which depends only on NumPy, together with the `deployment_contract.json` that every export now writes next to `policy.onnx`:

@@ -20,6 +20,10 @@ from .latent_replay import LatentPerceptiveReplay
 from .perception import PerceptionSpec
 
 
+class NoCompleteReferenceWindow(RuntimeError):
+    """Replay has enough rows, but every training sequence crosses a break."""
+
+
 class CompressedLatentReplay(LatentPerceptiveReplay):
     storage_protocol = "frame_uint8_v1"
 
@@ -224,7 +228,22 @@ class CompressedLatentReplay(LatentPerceptiveReplay):
             counts = valid.cumsum(1, dtype=torch.int32)
             total = counts[:, -1].contiguous()
             if not (total > 0).any():
-                raise RuntimeError("No complete in-episode state window available for the reference WM")
+                # Only the first size-1 rows can supply supervised transitions.
+                # Report overlapping causes on training environments, on failure only.
+                rows = chronological[:-1]
+                causes = {
+                    "invalid": ~self._valid[rows],
+                    "terminated": self.data["terminated"][rows],
+                    "timeout": self.data["timeout"][rows],
+                    "explicit_cut": self._cut_rows[rows],
+                }
+                numbers = torch.stack([(mask & self._train_env).sum() for mask in causes.values()]).tolist()
+                details = ", ".join(f"{name}={n}" for name, n in zip(causes, numbers))
+                raise NoCompleteReferenceWindow(
+                    f"No complete in-episode state window available for the reference WM "
+                    f"(need {length} consecutive valid transitions; {self.size} replay rows, "
+                    f"{self.train_env_count} training environments; {details})"
+                )
             self._reference_window_index = (key, counts, total)
         _, counts, total = self._reference_window_index
         env = torch.multinomial((total > 0).float(), batch_size, replacement=True)

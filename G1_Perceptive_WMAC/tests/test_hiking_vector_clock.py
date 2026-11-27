@@ -3,10 +3,80 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from src.wmac_perceptive.compact_gpu_replay import NoCompleteReferenceWindow
 from src.wmac_perceptive.reference_loop import learn_reference
 
 
 class VectorStepClockTest(unittest.TestCase):
+    def window_runner(self, end, *, start=0, utd=1.):
+        runner = SimpleNamespace(
+            cfg=SimpleNamespace(collect_steps=0, utd=utd, iterations=end, wm_window=7,
+                                actor_updates=1, validation_env_fraction=0., actor_lr=.0002,
+                                save_interval=10, log_interval=2),
+            sim_steps=start, env=SimpleNamespace(num_envs=1), iteration=3 if start else 0,
+            imagination_steps=0, replay=SimpleNamespace(size=min(start, 8), capacity_steps=8),
+            _collect_accumulator=max(start-1, 0), wall_time=0., log_dir=Path("run"),
+            writer=Mock(), save=Mock(), _log=Mock(),
+            update_actor_critic=Mock(return_value={"actor_loss": 1.}),
+            update_discriminator=Mock(return_value=dict(
+                discriminator_updates_applied=0, amp_rollout_blocks=0, amp_policy_windows=0,
+                amp_policy_exposures=0, amp_invalid_windows_dropped=0)),
+        )
+        def collect(count):
+            runner.replay.size = min(runner.replay.size + count, runner.replay.capacity_steps)
+            runner.sim_steps += count
+            runner.wall_time += 1.
+            return {}
+        runner.collect = collect
+        return runner
+
+    def test_transient_missing_windows_do_not_change_vector_or_update_clock(self):
+        runner = self.window_runner(11, utd=2.)
+        attempts = []
+        def fit():
+            attempts.append(runner.sim_steps)
+            if runner.sim_steps in (8, 9):
+                raise NoCompleteReferenceWindow("terminated=12")
+            return {"wm_loss": 1.}
+        runner.fit_model = fit
+        with patch("builtins.print") as output:
+            learn_reference(runner)
+        self.assertEqual(attempts, [8, 9, 10, 10, 11, 11])
+        self.assertEqual(runner.iteration, 4)
+        self.assertEqual(runner.update_actor_critic.call_count, 4)
+        self.assertEqual(runner.update_discriminator.call_count, 11)
+        self.assertEqual(sum("Continuing collection" in c.args[0] for c in output.call_args_list), 1)
+
+    def test_starvation_fails_at_capacity_or_run_end_even_after_resume(self):
+        for start, end, stopped in ((0, 11, 11), (40, 52, 49)):
+            with self.subTest(start=start):
+                runner = self.window_runner(end, start=start)
+                runner.fit_model = Mock(side_effect=NoCompleteReferenceWindow("invalid=7"))
+                with patch("builtins.print"), self.assertRaisesRegex(
+                    RuntimeError, f"by vector step {stopped}.*invalid=7"
+                ):
+                    learn_reference(runner)
+                runner.update_actor_critic.assert_not_called()
+                self.assertEqual(runner.sim_steps, stopped)
+
+    def test_retry_after_more_than_one_replay_capacity_between_updates(self):
+        runner = self.window_runner(25)
+        runner.cfg.collect_steps = 12
+        runner.fit_model = Mock(side_effect=[NoCompleteReferenceWindow("terminated=5"), {"wm_loss": 1.}])
+        with patch("builtins.print"):
+            learn_reference(runner)
+        self.assertEqual(runner.fit_model.call_count, 2)
+        runner.update_actor_critic.assert_called_once()
+        self.assertEqual(runner.sim_steps, 25)
+
+    def test_short_collection_with_no_scheduled_model_update_still_finishes(self):
+        runner = self.window_runner(7)
+        runner.fit_model = Mock()
+        learn_reference(runner)
+        runner.fit_model.assert_not_called()
+        self.assertEqual(runner.sim_steps, 7)
+        self.assertEqual(runner.save.call_args.args[0].name, "model_0.pt")
+
     def test_fractional_and_multiple_updates_with_replay_fill(self):
         for ratio in (.4, 2.0):
             with self.subTest(ratio=ratio):
