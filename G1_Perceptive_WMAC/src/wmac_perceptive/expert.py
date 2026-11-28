@@ -10,6 +10,7 @@ from mjlab.tasks.registry import load_rl_cfg
 from src.amp_features import amp_feature_dim, build_amp_features
 from src.wmac.runner import ExpertPairs
 
+from src.wmac.device_placement import transfer
 from .config import LEGACY_WALKING_EXPERT
 from .motions import (
     file_sha256, prepare_locomotion_dataset, read_motion, verify_locomotion_dataset, verify_mirrored_dataset,
@@ -116,8 +117,8 @@ class PerceptiveExpertPairs(ExpertPairs):
             raise ValueError("Hiking expert body mapping differs from the simulated G1")
         torso = names.index("torso_link")
         robot = env.scene["robot"]
-        default_pos = robot.data.default_joint_pos[0].to(device)
-        default_vel = robot.data.default_joint_vel[0].to(device)
+        default_pos = transfer(robot.data.default_joint_pos[0], device)
+        default_vel = transfer(robot.data.default_joint_vel[0], device)
         chunks, ends, clips, offset = [], [], [], 0
         standing_windows=0
         for path in sorted((root/"WalkandRun").glob("*.npz")):
@@ -204,8 +205,8 @@ class PerceptiveExpertPairs(ExpertPairs):
         next_rot = torch.cat((rot[1:], rot[-1:]))
         next_rot = torch.where((rot*next_rot).sum(-1, keepdim=True) < 0, -next_rot, next_rot)
         omega = axis_angle_from_quat(quat_mul(next_rot, quat_conjugate(rot))) / dt
-        default = robot.data.default_joint_pos[0].to(device)
-        default_vel = robot.data.default_joint_vel[0].to(device)
+        default = transfer(robot.data.default_joint_pos[0], device)
+        default_vel = transfer(robot.data.default_joint_vel[0], device)
         normal = frame(q, dq, rot, v, omega, default, default_vel)
         # Apply the original G1 sagittal permutation/signs in runtime joint order.
         # In the release's G1 table each left/right joint is exchanged and

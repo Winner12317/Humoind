@@ -28,7 +28,8 @@ from .perception import PerceptionSpec
 # they do not relabel the saved training objective, terrain or sensor history.
 MUTABLE_RESUME_FIELDS = frozenset((
     "iterations", "log_root", "run_name", "resume", "init_policy",
-    "device", "replay_device", "sim_device", "save_interval", "log_interval",
+    "device", "replay_device", "sim_device", "device_transfer", "verify_device_transfer",
+    "save_interval", "log_interval",
     "evaluation_interval", "evaluation_envs", "evaluation_steps",
     "mirrored_motion_root",
     "migrate_perception_training",

@@ -288,6 +288,12 @@ class PerceptiveConfig(WmacConfig):
     # Placement belongs to the machine, not the experiment: it is never
     # restored from a checkpoint.
     sim_device: str = ""
+    # How tensors cross between two GPUs: "host" stages every copy through
+    # pinned CPU memory; "direct" uses one peer-to-peer copy, which is faster
+    # but delivers wrong values on some machines. Either way each crossing is
+    # checksummed on both cards unless verify_device_transfer is switched off.
+    device_transfer: str = "host"
+    verify_device_transfer: bool = True
     # MuJoCo-Warp 3.8.1 drops heightfield contacts unless patched. Training
     # refuses that physics unless this is set; resumes never inherit it.
     allow_unpatched_hfield: bool = False
@@ -379,6 +385,8 @@ class PerceptiveConfig(WmacConfig):
             raise ValueError("The shoe robot variant requires Hiking training version 4")
         if self.sim_device and self.sim_device != "cpu" and not self.sim_device.startswith("cuda"):
             raise ValueError("sim_device must be empty, cpu or a CUDA device")
+        if self.device_transfer not in ("host", "direct"):
+            raise ValueError("device_transfer must be host or direct")
         if self.sim_device and self.sim_device != self.device and self.hiking_training_version < 3:
             raise ValueError("A separate simulator device requires the Hiking task (training version 3 or later)")
         if self.depth_geometry not in DEPTH_GEOMETRIES:
@@ -649,5 +657,6 @@ def config_from_payload(payload):
     defaults.allow_unpatched_hfield = False
     # Neither does it inherit where the previous process placed its simulator.
     defaults.sim_device = ""
+    defaults.device_transfer, defaults.verify_device_transfer = "host", True
     defaults.validate()
     return defaults

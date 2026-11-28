@@ -8,6 +8,14 @@ adapter's constants; everything that reads the live simulation stays on the
 environment's adapter and is moved across once per control step.
 
 With one device (the default) every function here returns its argument.
+
+Copies between two CUDA devices are staged through pinned CPU memory and
+checked. A direct GPU-to-GPU copy uses PCIe peer-to-peer transfer, which
+NVIDIA does not support on bare-metal Linux with the IOMMU enabled and which
+has been seen to deliver wrong values silently on such machines, while the two
+host copies are the ordinary, reliable path. Every crossing is verified with a
+checksum computed on both cards; a mismatch is retried and then raised, never
+trained on. ``configure_transfers`` selects the route and the check.
 """
 from __future__ import annotations
 
@@ -17,6 +25,129 @@ import dataclasses
 import torch
 
 LIVE_ADAPTER_READS = ("state", "command", "context")
+# "host": GPU -> pinned CPU memory -> GPU. "direct": one peer-to-peer copy.
+TRANSFER_ROUTES = ("host", "direct")
+TRANSFER_ATTEMPTS = 3
+_policy = {"route": "host", "verify": True}
+_staging = {}
+transfer_statistics = {"cross_gpu_tensors": 0, "checksum_mismatches": 0}
+
+
+def configure_transfers(route="host", verify=True):
+    """Set how tensors cross between two CUDA devices for this process."""
+    if route not in TRANSFER_ROUTES:
+        raise ValueError(f"device transfer route must be one of {TRANSFER_ROUTES}")
+    _policy.update(route=route, verify=bool(verify))
+
+
+def crosses_gpus(source, target):
+    source, target = torch.device(source), torch.device(target)
+    return source.type == "cuda" and target.type == "cuda" and source != target
+
+
+def checksum(tensor):
+    """Sum of the tensor's bytes, computed where the tensor lives (a 0-dim int64 tensor)."""
+    if tensor.is_complex() or tensor.numel() == 0:
+        return torch.zeros((), dtype=torch.int64, device=tensor.device)
+    return tensor.contiguous().reshape(-1).view(torch.uint8).sum(dtype=torch.int64)
+
+
+def _copy(tensor, device, key=None):
+    """One unverified copy by the configured route."""
+    if _policy["route"] == "direct" or not crosses_gpus(tensor.device, device):
+        return tensor.to(device)
+    if key is None:
+        return tensor.cpu().to(device)
+    # Per-step traffic reuses one pinned buffer per stream; both legs block, so
+    # the buffer is free again when this returns.
+    slot = (key, tuple(tensor.shape), tensor.dtype)
+    host = _staging.get(slot)
+    if host is None:
+        host = _staging[slot] = torch.empty(tensor.shape, dtype=tensor.dtype, pin_memory=torch.cuda.is_available())
+    host.copy_(tensor)
+    return host.to(device)
+
+
+def _mismatch(names, source, device):
+    return RuntimeError(
+        f"Tensors {names} arrived on {device} with different contents than they had on {source}, "
+        f"{TRANSFER_ATTEMPTS} times in a row (route: {_policy['route']}). Refusing to train on corrupted data. "
+        "Run scripts/check_gpu_transfers.py on this machine; see README, 'Training on two GPUs'.")
+
+
+def transfer(tensor, device, *, key=None):
+    """``tensor`` on ``device``; copies between two GPUs are staged through the host and verified."""
+    device = torch.device(device)
+    if tensor.device == device:
+        return tensor
+    if not crosses_gpus(tensor.device, device):
+        return tensor.to(device)
+    transfer_statistics["cross_gpu_tensors"] += 1
+    expected = int(checksum(tensor)) if _policy["verify"] else None
+    for _ in range(TRANSFER_ATTEMPTS):
+        moved = _copy(tensor, device, key)
+        if expected is None or int(checksum(moved)) == expected:
+            return moved
+        transfer_statistics["checksum_mismatches"] += 1
+    raise _mismatch([key or "tensor"], tensor.device, device)
+
+
+def transfer_batch(batch, device):
+    """A dictionary's tensors on ``device``, verified with one checksum readback per side."""
+    device = torch.device(device)
+    names = [name for name, item in batch.items() if isinstance(item, torch.Tensor) and item.device != device]
+    if not names:
+        return batch
+    moved = dict(batch)
+    crossing = [name for name in names if crosses_gpus(batch[name].device, device)]
+    for name in names:
+        if name not in crossing:
+            moved[name] = batch[name].to(device)
+    if not crossing:
+        return moved
+    transfer_statistics["cross_gpu_tensors"] += len(crossing)
+    expected = (torch.stack([checksum(batch[name]) for name in crossing]).cpu() if _policy["verify"] else None)
+    pending = list(crossing)
+    for _ in range(TRANSFER_ATTEMPTS):
+        for name in pending:
+            moved[name] = _copy(batch[name], device, name)
+        if expected is None:
+            return moved
+        arrived = torch.stack([checksum(moved[name]) for name in crossing]).cpu()
+        pending = [name for name, good in zip(crossing, (arrived == expected).tolist()) if not good]
+        if not pending:
+            return moved
+        transfer_statistics["checksum_mismatches"] += len(pending)
+    raise _mismatch(pending, batch[pending[0]].device, device)
+
+
+def transfer_self_test(first, second, *, trials=10, megabytes=(1, 64)):
+    """Exact comparison of copies in both directions by both routes.
+
+    Returns ``{route: {"a->b": [wrong, total], ...}}``. The comparison reads both
+    tensors back through the host, which is the path that is known to be sound.
+    """
+    report, previous = {}, dict(_policy)
+    generator = torch.Generator().manual_seed(0)
+    try:
+        for route in TRANSFER_ROUTES:
+            _policy.update(route=route, verify=False)
+            report[route] = {}
+            for source, target in ((first, second), (second, first)):
+                wrong = total = 0
+                for trial in range(trials):
+                    size = megabytes[trial % len(megabytes)] * 2**20
+                    original = torch.randint(0, 256, (size,), dtype=torch.uint8, generator=generator)
+                    on_source = original.to(source)
+                    arrived = _copy(on_source, torch.device(target))
+                    if torch.device(target).type == "cuda":
+                        torch.cuda.synchronize(target)
+                    wrong += int(not torch.equal(arrived.cpu(), original))
+                    total += 1
+                report[route][f"{source}->{target}"] = [wrong, total]
+    finally:
+        _policy.update(previous)
+    return report
 
 
 def relocate(value, device, *, source=None, shared=(), _memo=None):
@@ -36,7 +167,7 @@ def relocate(value, device, *, source=None, shared=(), _memo=None):
     if any(value is item for item in shared):
         return value
     if isinstance(value, torch.Tensor):
-        result = value.to(device)
+        result = transfer(value, device)
     elif isinstance(value, torch.device):
         result = torch.device(device) if source is not None and value == torch.device(source) else value
     elif isinstance(value, torch.nn.Module):
@@ -77,7 +208,7 @@ def learner_adapter(adapter, device):
     moved = relocate(adapter, device, source=adapter.device, shared=(adapter.env,))
     for name in LIVE_ADAPTER_READS:
         live = getattr(adapter, name)
-        setattr(moved, name, lambda live=live: live().to(device))
+        setattr(moved, name, lambda live=live, name=name: transfer(live(), device, key=f"adapter.{name}"))
     return moved
 
 
@@ -93,12 +224,11 @@ def boundary(runner):
 def to_device(value, device):
     """Move a tensor, or the tensors of a transition dictionary, to ``device``.
 
-    A value already there is returned unchanged, so single-device runs pay nothing.
+    A value already there is returned unchanged, so single-device runs pay
+    nothing. Copies between two GPUs follow ``transfer``'s route and check.
     """
     if isinstance(value, torch.Tensor):
-        return value if value.device == device else value.to(device, non_blocking=True)
+        return transfer(value, device, key=f"stream.{tuple(value.shape)}.{value.dtype}")
     if isinstance(value, dict):
-        if all(not isinstance(item, torch.Tensor) or item.device == device for item in value.values()):
-            return value
-        return {name: to_device(item, device) for name, item in value.items()}
+        return transfer_batch(value, device)
     return value

@@ -212,6 +212,33 @@ def assign_devices(cfg,environment):
     if cfg.sim_device==cfg.device:cfg.sim_device=""
 
 
+def check_device_transfers(cfg):
+    """Select the cross-GPU copy route and test both routes before anything is built.
+
+    Returns the test report, or None when the simulator is not on a second GPU.
+    A machine whose direct copies are wrong still trains correctly on the host
+    route; a wrong copy on the selected route stops the run here.
+    """
+    import torch
+    from src.wmac.device_placement import configure_transfers,crosses_gpus,transfer_self_test
+    configure_transfers(cfg.device_transfer,cfg.verify_device_transfer)
+    if not crosses_gpus(cfg.sim_device,cfg.device):return None
+    report=transfer_self_test(cfg.device,cfg.sim_device)
+    for route,directions in report.items():
+        summary=", ".join(f"{direction} {wrong}/{total} wrong" for direction,(wrong,total) in directions.items())
+        print(f"[Perceptive WMAC] GPU-to-GPU copy test, {route} route: {summary}",flush=True)
+    if any(wrong for wrong,_ in report[cfg.device_transfer].values()):
+        raise RuntimeError(f"Copies between {cfg.device} and {cfg.sim_device} arrive with wrong values on the "
+            f"selected '{cfg.device_transfer}' route. "+("Use --device-transfer host." if cfg.device_transfer=="direct"
+            else "Even copies through CPU memory are wrong: suspect a GPU, its slot or its memory, and do not train on this pair."))
+    if any(wrong for wrong,_ in report["direct"].values()):
+        print("[Perceptive WMAC] Direct GPU-to-GPU copies are unreliable on this pair; "
+              "this run stages every copy through CPU memory and checksums it.",flush=True)
+    print(f"[Perceptive WMAC] cross-GPU copies: {cfg.device_transfer} route, "
+          f"{'checksummed on both cards' if cfg.verify_device_transfer else 'NOT verified'}",flush=True)
+    return report
+
+
 def snapshot_sources(log_dir,cfg=None):
     for folder in ("wmac","wmac_perceptive"):
         shutil.copytree(ROOT/"src"/folder,log_dir/"source"/"src"/folder,ignore=shutil.ignore_patterns("__pycache__"))
@@ -423,9 +450,11 @@ def main(cfg):
     if cfg.robot_dynamics_randomization!="none":
         print(f"[Perceptive WMAC] robot dynamics randomization: {cfg.robot_dynamics_randomization} "
               "(startup-only; sampled values condition the world model and critic, not the Actor)",flush=True)
+    transfer_check=None
     if cfg.sim_device:
         print(f"[Perceptive WMAC] placement: simulator on {cfg.sim_device}; learner and replay on {cfg.device} "
               f"(CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES','unset')})",flush=True)
+        transfer_check=check_device_transfers(cfg)
     env=runner=None;started=time.perf_counter();complete=False;failure=None
     if cfg.device.startswith("cuda"):torch.cuda.reset_peak_memory_stats()
     try:
@@ -450,6 +479,10 @@ def main(cfg):
             runtime["torch_cuda_peak_allocated_bytes"]=torch.cuda.max_memory_allocated(cfg.device)
             runtime["torch_cuda_peak_reserved_bytes"]=torch.cuda.max_memory_reserved(cfg.device)
             runtime["devices"]={"learner_and_replay":cfg.device,"simulator":cfg.sim_device or cfg.device}
+            if transfer_check is not None:
+                from src.wmac.device_placement import transfer_statistics
+                runtime["device_transfer"]={"route":cfg.device_transfer,"verified":cfg.verify_device_transfer,
+                    "startup_test_wrong_of_total":transfer_check,**transfer_statistics}
             # Whole-card use as the driver sees it: PyTorch, the simulator and CUDA graphs together.
             runtime["gpu_memory_used_bytes"]={name:(lambda free,total:total-free)(*torch.cuda.mem_get_info(name))
                 for name in dict.fromkeys((cfg.device,cfg.sim_device or cfg.device)) if name.startswith("cuda")}

@@ -9,10 +9,12 @@ from __future__ import annotations
 from collections import namedtuple
 from dataclasses import asdict, dataclass
 import unittest
+from unittest import mock
 
 import torch
 
 from scripts.train_wmac_perceptive import assign_devices, make_environment
+from src.wmac import device_placement as placement
 from src.wmac.device_placement import LIVE_ADAPTER_READS, learner_adapter, relocate, to_device
 from src.wmac_perceptive.config import FORMAT, PerceptiveConfig, config_from_payload
 from src.wmac_perceptive.checkpoints import MUTABLE_RESUME_FIELDS
@@ -240,6 +242,127 @@ class LearnerAdapterTest(unittest.TestCase):
                 value = getattr(moved, name)()
                 self.assertEqual(value.device.type, "cuda")
                 torch.testing.assert_close(value.cpu(), getattr(self.adapter, name)())
+
+
+class VerifiedTransferTest(unittest.TestCase):
+    """Copies between two GPUs: staged through CPU memory and checksummed on both sides.
+
+    One CUDA device is enough here: the CPU stands in for the first card and
+    ``crosses_gpus`` is told that the pair counts as two GPUs.
+    """
+
+    def setUp(self):
+        self.addCleanup(placement.configure_transfers, "host", True)
+        self.addCleanup(placement.transfer_statistics.update, dict(placement.transfer_statistics))
+        placement.configure_transfers("host", True)
+        placement.transfer_statistics.update(cross_gpu_tensors=0, checksum_mismatches=0)
+
+    def test_checksum_sees_changed_bytes_and_ignores_layout(self):
+        value = torch.arange(24, dtype=torch.float32).reshape(2, 3, 4)
+        same = int(placement.checksum(value))
+        self.assertEqual(int(placement.checksum(value.transpose(0, 2))), same)       # non-contiguous view, same bytes
+        self.assertNotEqual(int(placement.checksum(torch.zeros_like(value))), same)
+        changed = value.clone()
+        changed[1, 2, 3] = float("nan")
+        self.assertNotEqual(int(placement.checksum(changed)), same)
+        self.assertEqual(int(placement.checksum(torch.tensor([True, False, True]))), 2)
+        self.assertEqual(int(placement.checksum(torch.empty(0))), 0)
+        self.assertEqual(int(placement.checksum(torch.tensor(3, dtype=torch.int64))), 3)
+
+    def test_route_is_a_validated_setting_never_restored_from_a_checkpoint(self):
+        with self.assertRaisesRegex(ValueError, "route"):
+            placement.configure_transfers("peer")
+        cfg = PerceptiveConfig.defaults("supermimic")
+        self.assertEqual((cfg.device_transfer, cfg.verify_device_transfer), ("host", True))
+        cfg.device_transfer, cfg.verify_device_transfer = "direct", False
+        cfg.validate()
+        restored = config_from_payload({"format": FORMAT, "config": asdict(cfg)})
+        self.assertEqual((restored.device_transfer, restored.verify_device_transfer), ("host", True))
+        self.assertTrue({"device_transfer", "verify_device_transfer"} <= MUTABLE_RESUME_FIELDS)
+        cfg.device_transfer = "p2p"
+        with self.assertRaisesRegex(ValueError, "device_transfer"):
+            cfg.validate()
+
+    def test_only_two_different_gpus_count_as_a_crossing(self):
+        self.assertTrue(placement.crosses_gpus("cuda:0", "cuda:1"))
+        for source, target in (("cuda:1", "cuda:1"), ("cpu", "cuda:0"), ("cuda:0", "cpu"), ("cpu", "cpu")):
+            self.assertFalse(placement.crosses_gpus(source, target))
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
+    def test_host_route_delivers_exact_values_of_every_kind(self):
+        values = {"float": torch.randn(5, 7), "flags": torch.rand(9) > .5, "index": torch.arange(11),
+                  "scalar": torch.tensor(2.5), "empty": torch.empty(0, 3), "view": torch.randn(4, 6).t(),
+                  "half": torch.randn(3, 3).half(), "label": "kept"}
+        with mock.patch.object(placement, "crosses_gpus", lambda source, target: True):
+            moved = placement.transfer_batch(values, "cuda:0")
+            single = placement.transfer(values["float"], "cuda:0", key="stream")
+            again = placement.transfer(values["float"] + 1, "cuda:0", key="stream")
+        self.assertEqual(moved["label"], "kept")
+        for name, value in values.items():
+            if torch.is_tensor(value):
+                self.assertEqual(moved[name].device.type, "cuda")
+                self.assertEqual(moved[name].dtype, value.dtype)
+                torch.testing.assert_close(moved[name].cpu(), value, rtol=0, atol=0, equal_nan=True)
+        # A reused staging buffer never aliases an earlier result.
+        torch.testing.assert_close(single.cpu(), values["float"], rtol=0, atol=0)
+        torch.testing.assert_close(again.cpu(), values["float"] + 1, rtol=0, atol=0)
+        self.assertEqual(placement.transfer_statistics, {"cross_gpu_tensors": 9, "checksum_mismatches": 0})
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
+    def test_a_wrong_copy_is_retried_and_a_persistent_one_stops_training(self):
+        honest, calls = placement._copy, {"count": 0}
+
+        def flaky(tensor, device, key=None):
+            calls["count"] += 1
+            moved = honest(tensor, device, key)
+            return torch.zeros_like(moved) if key == "terminated" and calls["count"] <= self.failures else moved
+
+        batch = {"state": torch.randn(6, 4), "terminated": torch.tensor([True, False, True, True, False, True])}
+        with mock.patch.object(placement, "crosses_gpus", lambda source, target: True), \
+                mock.patch.object(placement, "_copy", flaky):
+            self.failures = 2                                   # wrong once, then right
+            moved = placement.transfer_batch(batch, "cuda:0")
+            torch.testing.assert_close(moved["terminated"].cpu(), batch["terminated"])
+            torch.testing.assert_close(moved["state"].cpu(), batch["state"], rtol=0, atol=0)
+            self.assertEqual(placement.transfer_statistics["checksum_mismatches"], 1)
+            self.assertEqual(calls["count"], 3)                 # only the wrong tensor was copied again
+            calls["count"], self.failures = 0, 10**6            # wrong every time
+            with self.assertRaisesRegex(RuntimeError, r"\['terminated'\].*Refusing to train on corrupted data"):
+                placement.transfer_batch(batch, "cuda:0")
+            calls["count"] = 0
+            with self.assertRaisesRegex(RuntimeError, "Refusing to train"):
+                placement.transfer(batch["terminated"], "cuda:0", key="terminated")
+            # Without verification the same wrong copy would be trained on.
+            placement.configure_transfers("host", verify=False)
+            calls["count"] = 0
+            self.assertFalse(placement.transfer_batch(batch, "cuda:0")["terminated"].any())
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
+    def test_startup_test_reports_each_route_and_refuses_a_wrong_one(self):
+        from scripts.train_wmac_perceptive import check_device_transfers
+        honest = placement._copy
+
+        def broken_direct(tensor, device, key=None):
+            moved = honest(tensor, device, key)
+            return moved.roll(1) if placement._policy["route"] == "direct" else moved
+
+        cfg = PerceptiveConfig.defaults("supermimic")
+        cfg.device, cfg.sim_device = "cuda:0", "cpu"
+        self.assertIsNone(check_device_transfers(cfg))          # no second GPU: nothing to test
+        with mock.patch.object(placement, "crosses_gpus", lambda source, target: True), \
+                mock.patch.object(placement, "_copy", broken_direct), \
+                mock.patch.object(placement, "transfer_self_test",
+                                  lambda a, b, **kw: self_test(a, b, trials=4, megabytes=(1,))):
+            report = check_device_transfers(cfg)
+            self.assertEqual(report["host"], {"cuda:0->cpu": [0, 4], "cpu->cuda:0": [0, 4]})
+            self.assertEqual(report["direct"], {"cuda:0->cpu": [4, 4], "cpu->cuda:0": [4, 4]})
+            self.assertEqual(placement._policy, {"route": "host", "verify": True})
+            cfg.device_transfer = "direct"
+            with self.assertRaisesRegex(RuntimeError, "Use --device-transfer host"):
+                check_device_transfers(cfg)
+
+
+self_test = placement.transfer_self_test
 
 
 if __name__ == "__main__":
