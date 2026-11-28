@@ -14,8 +14,9 @@ checked. A direct GPU-to-GPU copy uses PCIe peer-to-peer transfer, which
 NVIDIA does not support on bare-metal Linux with the IOMMU enabled and which
 has been seen to deliver wrong values silently on such machines, while the two
 host copies are the ordinary, reliable path. Every crossing is verified with a
-checksum computed on both cards; a mismatch is retried and then raised, never
-trained on. ``configure_transfers`` selects the route and the check.
+checksum computed on both cards. After a mismatch every step is repeated (both
+checksums and the copy), and a mismatch that persists is raised, never trained
+on. ``configure_transfers`` selects the route and the check.
 """
 from __future__ import annotations
 
@@ -30,7 +31,10 @@ TRANSFER_ROUTES = ("host", "direct")
 TRANSFER_ATTEMPTS = 3
 _policy = {"route": "host", "verify": True}
 _staging = {}
-transfer_statistics = {"cross_gpu_tensors": 0, "checksum_mismatches": 0}
+REPORTED_RECOVERIES = 20
+# checksum_mismatches counts failed checks, each followed by a retry; source_readings_differed
+# counts the retries in which the source card returned a different checksum for the same tensor.
+transfer_statistics = {"cross_gpu_tensors": 0, "checksum_mismatches": 0, "source_readings_differed": 0}
 
 
 def configure_transfers(route="host", verify=True):
@@ -68,11 +72,73 @@ def _copy(tensor, device, key=None):
     return host.to(device)
 
 
-def _mismatch(names, source, device):
-    return RuntimeError(
-        f"Tensors {names} arrived on {device} with different contents than they had on {source}, "
-        f"{TRANSFER_ATTEMPTS} times in a row (route: {_policy['route']}). Refusing to train on corrupted data. "
-        "Run scripts/check_gpu_transfers.py on this machine; see README, 'Training on two GPUs'.")
+def _bytes(tensor):
+    tensor = torch.view_as_real(tensor) if tensor.is_complex() else tensor
+    return tensor.contiguous().reshape(-1).view(torch.uint8)
+
+
+def _settled_checksum(tensor):
+    """The checksum once every CUDA stream on the tensor's card has finished its work."""
+    if tensor.is_cuda:
+        torch.cuda.synchronize(tensor.device)
+    return int(checksum(tensor))
+
+
+def _diagnose(tensor, moved):
+    """Which step is wrong, by exact comparison through CPU memory (failure path only)."""
+    first, second, arrived = tensor.cpu(), tensor.cpu(), moved.cpu()
+    facts = {
+        "source_stable": bool(torch.equal(_bytes(first), _bytes(second))),
+        "copy_equals_source": bool(torch.equal(_bytes(arrived), _bytes(first))),
+        "source_checksum_right": int(checksum(tensor)) == int(checksum(first)),
+        "target_checksum_right": int(checksum(moved)) == int(checksum(arrived)),
+    }
+    text = (f"the tensor on {tensor.device} {'is stable' if facts['source_stable'] else 'CHANGES between two readings'}; "
+            f"the copy {'equals' if facts['copy_equals_source'] else 'DIFFERS from'} it; "
+            f"the checksum computed on {tensor.device} is {'right' if facts['source_checksum_right'] else 'WRONG'}; "
+            f"the checksum computed on {moved.device} is {'right' if facts['target_checksum_right'] else 'WRONG'}")
+    return facts, text
+
+
+def _mismatch(names, tensor, moved):
+    facts, text = _diagnose(tensor, moved)
+    error = RuntimeError(
+        f"Tensors {names} arrived on {moved.device} with different contents than they had on {tensor.device}, "
+        f"after {TRANSFER_ATTEMPTS + 1} copies and {TRANSFER_ATTEMPTS + 1} readings of each checksum "
+        f"(route: {_policy['route']}). Refusing to train on corrupted data. Exact comparison through CPU memory: "
+        f"{text}. Run scripts/check_gpu_transfers.py on this machine; see README, 'Training on two GPUs'.")
+    error.diagnosis = facts
+    return error
+
+
+def _note(key, what):
+    if transfer_statistics["checksum_mismatches"] <= REPORTED_RECOVERIES:
+        print(f"[device transfer] checksum mismatch on {key or 'tensor'!r}: {what}. Training continues with "
+              "verified data; the count is in runtime.json under device_transfer.", flush=True)
+
+
+def _recover(tensor, moved, expected, device, key):
+    """Slow path after a checksum mismatch: the verified copy, or an error.
+
+    Four steps can have failed: the checksum on the source card, either leg of
+    the copy, or the checksum on the target card. Each is repeated, the source
+    one after every stream on its card has finished, so that a single bad
+    reading of any of them costs a retry and not the run.
+    """
+    for _ in range(TRANSFER_ATTEMPTS):
+        transfer_statistics["checksum_mismatches"] += 1
+        source = _settled_checksum(tensor)
+        if source != expected:
+            transfer_statistics["source_readings_differed"] += 1
+            expected = source
+        if _settled_checksum(moved) == expected:
+            _note(key, "a checksum reading was wrong and the copy was right")
+            return moved
+        moved = _copy(tensor, device, key)
+        if int(checksum(moved)) == expected:
+            _note(key, "the copy was wrong and a second copy was right")
+            return moved
+    raise _mismatch([key or "tensor"], tensor, moved)
 
 
 def transfer(tensor, device, *, key=None):
@@ -84,12 +150,10 @@ def transfer(tensor, device, *, key=None):
         return tensor.to(device)
     transfer_statistics["cross_gpu_tensors"] += 1
     expected = int(checksum(tensor)) if _policy["verify"] else None
-    for _ in range(TRANSFER_ATTEMPTS):
-        moved = _copy(tensor, device, key)
-        if expected is None or int(checksum(moved)) == expected:
-            return moved
-        transfer_statistics["checksum_mismatches"] += 1
-    raise _mismatch([key or "tensor"], tensor.device, device)
+    moved = _copy(tensor, device, key)
+    if expected is None or int(checksum(moved)) == expected:
+        return moved
+    return _recover(tensor, moved, expected, device, key)
 
 
 def transfer_batch(batch, device):
@@ -107,18 +171,15 @@ def transfer_batch(batch, device):
         return moved
     transfer_statistics["cross_gpu_tensors"] += len(crossing)
     expected = (torch.stack([checksum(batch[name]) for name in crossing]).cpu() if _policy["verify"] else None)
-    pending = list(crossing)
-    for _ in range(TRANSFER_ATTEMPTS):
-        for name in pending:
-            moved[name] = _copy(batch[name], device, name)
-        if expected is None:
-            return moved
-        arrived = torch.stack([checksum(moved[name]) for name in crossing]).cpu()
-        pending = [name for name, good in zip(crossing, (arrived == expected).tolist()) if not good]
-        if not pending:
-            return moved
-        transfer_statistics["checksum_mismatches"] += len(pending)
-    raise _mismatch(pending, batch[pending[0]].device, device)
+    for name in crossing:
+        moved[name] = _copy(batch[name], device, name)
+    if expected is None:
+        return moved
+    arrived = torch.stack([checksum(moved[name]) for name in crossing]).cpu()
+    for name, good, value in zip(crossing, (arrived == expected).tolist(), expected.tolist()):
+        if not good:
+            moved[name] = _recover(batch[name], moved[name], value, device, name)
+    return moved
 
 
 def transfer_self_test(first, second, *, trials=10, megabytes=(1, 64)):

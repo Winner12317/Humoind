@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from collections import namedtuple
 from dataclasses import asdict, dataclass
+import contextlib
+import io
 import unittest
 from unittest import mock
 
 import torch
 
-from scripts.train_wmac_perceptive import assign_devices, make_environment
+from scripts.train_wmac_perceptive import assign_devices, make_environment, report_gpu_memory
 from src.wmac import device_placement as placement
 from src.wmac.device_placement import LIVE_ADAPTER_READS, learner_adapter, relocate, to_device
 from src.wmac_perceptive.config import FORMAT, PerceptiveConfig, config_from_payload
@@ -160,6 +162,40 @@ class DeviceAssignmentTest(unittest.TestCase):
             old.validate()
 
 
+class GpuMemoryReportTest(unittest.TestCase):
+    GB = 2**30
+
+    def report(self, free, sim_device="cuda:1", num_envs=4096):
+        cfg = PerceptiveConfig.defaults("supermimic")
+        cfg.device, cfg.sim_device, cfg.num_envs = "cuda:0", sim_device, num_envs
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            report = report_gpu_memory(cfg, {"CUDA_VISIBLE_DEVICES": "2,3"},
+                                       lambda device: (free[device] * self.GB, 48 * self.GB))
+        return report, output.getvalue()
+
+    def test_free_cards_are_reported_by_role_and_physical_index(self):
+        report, text = self.report({"cuda:0": 47.6, "cuda:1": 47.6})
+        self.assertEqual(report["learner and replay"]["card"], "GPU 2")
+        self.assertEqual(report["simulator"]["card"], "GPU 3")
+        self.assertAlmostEqual(report["simulator"]["estimated_simulator_bytes"] / self.GB, 28.1, delta=.1)
+        self.assertIn("simulator on cuda:1 (GPU 3): 47.6 of 48.0 GB free", text)
+        self.assertNotIn("WARNING", text)
+
+    def test_an_occupied_simulator_card_is_named_before_the_environment_is_built(self):
+        _, text = self.report({"cuda:0": 47.6, "cuda:1": 20.})
+        self.assertIn("28.0 GB of GPU 3 is already in use by another process", text)
+        self.assertIn("GPU 3 has too little free memory for the simulator", text)
+        self.assertNotIn("GPU 2 is already", text)
+
+    def test_one_card_and_a_cpu_simulator(self):
+        report, text = self.report({"cuda:0": 47.6}, sim_device="", num_envs=16)
+        self.assertEqual(list(report), ["simulator, learner and replay"])
+        self.assertNotIn("WARNING", text)
+        report, _ = self.report({"cuda:0": 47.6}, sim_device="cpu")
+        self.assertEqual(list(report), ["learner and replay"])
+
+
 class LearnerAdapterTest(unittest.TestCase):
     """The learner's adapter copy against the environment's own adapter, on a real environment."""
 
@@ -255,7 +291,7 @@ class VerifiedTransferTest(unittest.TestCase):
         self.addCleanup(placement.configure_transfers, "host", True)
         self.addCleanup(placement.transfer_statistics.update, dict(placement.transfer_statistics))
         placement.configure_transfers("host", True)
-        placement.transfer_statistics.update(cross_gpu_tensors=0, checksum_mismatches=0)
+        placement.transfer_statistics.update(cross_gpu_tensors=0, checksum_mismatches=0, source_readings_differed=0)
 
     def test_checksum_sees_changed_bytes_and_ignores_layout(self):
         value = torch.arange(24, dtype=torch.float32).reshape(2, 3, 4)
@@ -306,7 +342,8 @@ class VerifiedTransferTest(unittest.TestCase):
         # A reused staging buffer never aliases an earlier result.
         torch.testing.assert_close(single.cpu(), values["float"], rtol=0, atol=0)
         torch.testing.assert_close(again.cpu(), values["float"] + 1, rtol=0, atol=0)
-        self.assertEqual(placement.transfer_statistics, {"cross_gpu_tensors": 9, "checksum_mismatches": 0})
+        self.assertEqual(placement.transfer_statistics,
+                         {"cross_gpu_tensors": 9, "checksum_mismatches": 0, "source_readings_differed": 0})
 
     @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
     def test_a_wrong_copy_is_retried_and_a_persistent_one_stops_training(self):
@@ -330,12 +367,62 @@ class VerifiedTransferTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, r"\['terminated'\].*Refusing to train on corrupted data"):
                 placement.transfer_batch(batch, "cuda:0")
             calls["count"] = 0
-            with self.assertRaisesRegex(RuntimeError, "Refusing to train"):
+            with self.assertRaisesRegex(RuntimeError, "Refusing to train") as raised:
                 placement.transfer(batch["terminated"], "cuda:0", key="terminated")
+            # The error says which step failed: here the copy, with both checksums right.
+            self.assertEqual(raised.exception.diagnosis, {"source_stable": True, "copy_equals_source": False,
+                                                          "source_checksum_right": True, "target_checksum_right": True})
+            self.assertIn("the copy DIFFERS from it", str(raised.exception))
+            self.assertEqual(calls["count"], 1 + placement.TRANSFER_ATTEMPTS)
             # Without verification the same wrong copy would be trained on.
             placement.configure_transfers("host", verify=False)
             calls["count"] = 0
             self.assertFalse(placement.transfer_batch(batch, "cuda:0")["terminated"].any())
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
+    def test_one_wrong_checksum_reading_on_either_card_costs_a_retry_not_the_run(self):
+        honest_checksum, honest_copy = placement.checksum, placement._copy
+        value = torch.randn(64, 12)
+        for wrong_call, source_differed in ((1, 1), (2, 0)):    # 1: source card's reading, 2: target card's
+            calls = {"checksum": 0, "copy": 0}
+
+            def checksum(tensor):
+                calls["checksum"] += 1
+                return honest_checksum(tensor) + int(calls["checksum"] == wrong_call)
+
+            def copy(tensor, device, key=None):
+                calls["copy"] += 1
+                return honest_copy(tensor, device, key)
+
+            placement.transfer_statistics.update(cross_gpu_tensors=0, checksum_mismatches=0, source_readings_differed=0)
+            with mock.patch.object(placement, "crosses_gpus", lambda source, target: True), \
+                    mock.patch.object(placement, "checksum", checksum), mock.patch.object(placement, "_copy", copy), \
+                    contextlib.redirect_stdout(io.StringIO()) as output:
+                moved = placement.transfer(value, "cuda:0", key="stream")
+            torch.testing.assert_close(moved.cpu(), value, rtol=0, atol=0)
+            self.assertEqual(calls["copy"], 1)                  # the copy was right and is kept
+            self.assertEqual(placement.transfer_statistics, {"cross_gpu_tensors": 1, "checksum_mismatches": 1,
+                                                             "source_readings_differed": source_differed})
+            self.assertIn("a checksum reading was wrong and the copy was right", output.getvalue())
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
+    def test_a_source_still_being_written_is_read_again_after_its_card_settles(self):
+        honest_copy, value = placement._copy, torch.randn(32, 8)
+        final = value + 1
+
+        def late_write(tensor, device, key=None):               # the source changes after its checksum was taken
+            if tensor.shape == final.shape:
+                tensor.copy_(final)
+            return honest_copy(tensor, device, key)
+
+        batch = {"actor": value.clone(), "other": torch.arange(5)}
+        with mock.patch.object(placement, "crosses_gpus", lambda source, target: True), \
+                mock.patch.object(placement, "_copy", late_write), contextlib.redirect_stdout(io.StringIO()):
+            moved = placement.transfer(value.clone(), "cuda:0", key="stream")
+            both = placement.transfer_batch(batch, "cuda:0")
+        torch.testing.assert_close(moved.cpu(), final, rtol=0, atol=0)
+        torch.testing.assert_close(both["actor"].cpu(), final, rtol=0, atol=0)
+        self.assertEqual(placement.transfer_statistics["source_readings_differed"], 2)
 
     @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
     def test_startup_test_reports_each_route_and_refuses_a_wrong_one(self):

@@ -239,6 +239,44 @@ def check_device_transfers(cfg):
     return report
 
 
+# Whole-card simulator use on the 2.5 cm collision grid, fitted to 4.1, 5.7, 8.9 and 12.2 GB
+# measured at 256, 512, 1,024 and 1,536 robots (RTX 4080). Larger counts are extrapolated.
+SIMULATOR_GPU_BYTES=(2.5*2**30,6.4*2**20)
+
+
+def report_gpu_memory(cfg,environment,memory):
+    """Print free memory on each card this run uses, before anything large is allocated.
+
+    ``memory(device)`` returns (free, total) bytes for the whole card, so memory held by
+    other processes shows up here. Returns {role: {...}}; warns when the simulator card
+    has less free memory than the simulator is expected to need.
+    """
+    visible=[item for item in environment.get("CUDA_VISIBLE_DEVICES","").split(",") if item]
+    simulator=cfg.sim_device or cfg.device
+    roles=({"learner and replay":cfg.device,"simulator":simulator} if simulator!=cfg.device
+           else {"simulator, learner and replay":cfg.device})
+    need=SIMULATOR_GPU_BYTES[0]+SIMULATOR_GPU_BYTES[1]*cfg.num_envs if cfg.hiking_training_version>=3 else None
+    report={}
+    for role,device in roles.items():
+        if not device.startswith("cuda"):continue
+        index=int(device.partition(":")[2] or 0);free,total=memory(device)
+        card=f"GPU {visible[index]}" if index<len(visible) else device
+        report[role]={"device":device,"card":card,"free_bytes":int(free),"total_bytes":int(total)}
+        line=f"[Perceptive WMAC] {role} on {device} ({card}): {free/2**30:.1f} of {total/2**30:.1f} GB free"
+        if "simulator" in role and need is not None:
+            report[role]["estimated_simulator_bytes"]=int(need)
+            line+=f"; the simulator needs about {need/2**30:.1f} GB for {cfg.num_envs} robots"
+        print(line,flush=True)
+        if total-free>2*2**30:  # this process's own CUDA context stays well below
+            print(f"[Perceptive WMAC] WARNING: {(total-free)/2**30:.1f} GB of {card} is already in use by another "
+                  "process. `nvidia-smi` lists it.",flush=True)
+        if "simulator" in role and need is not None and free<need:
+            print(f"[Perceptive WMAC] WARNING: {card} has too little free memory for the simulator. Expect an "
+                  "out-of-memory error while the environment is built or first reset. Free the card, choose "
+                  "another one, or lower --num-envs.",flush=True)
+    return report
+
+
 def snapshot_sources(log_dir,cfg=None):
     for folder in ("wmac","wmac_perceptive"):
         shutil.copytree(ROOT/"src"/folder,log_dir/"source"/"src"/folder,ignore=shutil.ignore_patterns("__pycache__"))
@@ -456,6 +494,7 @@ def main(cfg):
               f"(CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES','unset')})",flush=True)
         transfer_check=check_device_transfers(cfg)
     env=runner=None;started=time.perf_counter();complete=False;failure=None
+    memory_at_start=report_gpu_memory(cfg,os.environ,torch.cuda.mem_get_info)
     if cfg.device.startswith("cuda"):torch.cuda.reset_peak_memory_stats()
     try:
         env=make_environment(cfg)
@@ -486,6 +525,7 @@ def main(cfg):
             # Whole-card use as the driver sees it: PyTorch, the simulator and CUDA graphs together.
             runtime["gpu_memory_used_bytes"]={name:(lambda free,total:total-free)(*torch.cuda.mem_get_info(name))
                 for name in dict.fromkeys((cfg.device,cfg.sim_device or cfg.device)) if name.startswith("cuda")}
+            runtime["gpu_memory_at_start"]=memory_at_start
             runtime["torch_memory_scope"]="PyTorch allocator; external simulator/driver allocations are additional"
         if runner is not None and runner.uses_fast_execution:
             execution=runner._latent_wm_execution
